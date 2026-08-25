@@ -2,9 +2,10 @@
 
 ## Milestone 2: deterministic flight simulation
 
-Tested with Apple Clang 21 in C++20 mode on August 25, 2026. Since CMake was
-not available on the development machine, the same sources and warning flags
-defined by the CMake targets were compiled directly.
+Tested with Apple Clang 21 in C++20 mode on August 25, 2026. Initial tests
+compiled the sources directly with the warning flags defined by the CMake
+targets. After installing CMake 4.4.2, the complete documented configure,
+build, and CTest workflow also passed from a clean out-of-tree build.
 
 Five complete flights were run at a fixed 0.01-second step. Each flight:
 
@@ -42,3 +43,17 @@ reported queue drops rather than blocking.
 
 The SPSC queue also transferred 100,000 sequential values between two threads
 without loss, corruption, or reordering in its concurrency test.
+
+## Complete build validation
+
+The documented workflow was run from a clean build directory:
+
+```text
+cmake -S . -B /tmp/flightdeck-x-cmake-build -DCMAKE_BUILD_TYPE=Debug
+cmake --build /tmp/flightdeck-x-cmake-build --parallel
+ctest --test-dir /tmp/flightdeck-x-cmake-build --output-on-failure
+```
+
+All targets compiled without warnings and all three registered tests passed.
+The CMake-built simulator and receiver then reproduced the 500-packet UDP
+result recorded above.
