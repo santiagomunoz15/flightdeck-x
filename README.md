@@ -39,7 +39,7 @@ flightdeck-x/
 
 ## Build and test
 
-Milestone 1 requires CMake 3.20 or newer and a C++20 compiler:
+The project requires CMake 3.20 or newer and a C++20 compiler:
 
 ```sh
 cmake -S . -B build
@@ -50,6 +50,12 @@ ctest --test-dir build --output-on-failure
 See [`protocol/telemetry.md`](protocol/telemetry.md) for the version 1 wire
 contract and [`docs/decisions.md`](docs/decisions.md) for the engineering
 decisions behind it.
+
+To run a complete flight without real-time delays after building:
+
+```sh
+./build/generator/flight_simulator --no-realtime
+```
 
 ## Build roadmap
 

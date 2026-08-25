@@ -81,13 +81,15 @@ void test_prelaunch_is_stationary() {
 
 void test_complete_flight_is_deterministic() {
   const FlightSummary first = run_complete_flight();
-  const FlightSummary second = run_complete_flight();
-  require(first.landing_time_s == second.landing_time_s,
-          "landing time is not deterministic");
-  require(first.maximum_altitude_m == second.maximum_altitude_m,
-          "maximum altitude is not deterministic");
-  require(first.final_mass_kg == second.final_mass_kg,
-          "final mass is not deterministic");
+  for (int flight = 1; flight < 5; ++flight) {
+    const FlightSummary repeated = run_complete_flight();
+    require(first.landing_time_s == repeated.landing_time_s,
+            "landing time is not deterministic");
+    require(first.maximum_altitude_m == repeated.maximum_altitude_m,
+            "maximum altitude is not deterministic");
+    require(first.final_mass_kg == repeated.final_mass_kg,
+            "final mass is not deterministic");
+  }
 }
 
 }  // namespace
