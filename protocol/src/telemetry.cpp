@@ -64,6 +64,7 @@ TelemetryBytes serialize(const Telemetry& telemetry) noexcept {
   write_unsigned(output, offset, kTelemetryVersion);
   write_unsigned(output, offset, telemetry.sequence);
   write_unsigned(output, offset, telemetry.timestamp_us);
+  write_unsigned(output, offset, static_cast<std::uint8_t>(telemetry.mission_phase));
   for (const double value : telemetry.position_m) write_double(output, offset, value);
   for (const double value : telemetry.velocity_mps) write_double(output, offset, value);
   for (const float value : telemetry.orientation_wxyz) write_float(output, offset, value);
@@ -96,6 +97,8 @@ DecodeResult deserialize(std::span<const std::byte> bytes) noexcept {
   Telemetry telemetry{};
   telemetry.sequence = read_unsigned<std::uint32_t>(bytes, offset);
   telemetry.timestamp_us = read_unsigned<std::uint64_t>(bytes, offset);
+  telemetry.mission_phase =
+      static_cast<MissionPhase>(read_unsigned<std::uint8_t>(bytes, offset));
   for (double& value : telemetry.position_m) value = read_double(bytes, offset);
   for (double& value : telemetry.velocity_mps) value = read_double(bytes, offset);
   for (float& value : telemetry.orientation_wxyz) value = read_float(bytes, offset);
@@ -107,4 +110,3 @@ DecodeResult deserialize(std::span<const std::byte> bytes) noexcept {
 }
 
 }  // namespace flightdeck::protocol
-

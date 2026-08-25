@@ -73,6 +73,7 @@ Start with:
 | version | `uint16` | — | Allows future format changes |
 | sequence | `uint32` | — | Detects dropped or reordered packets |
 | timestamp_us | `uint64` | µs | Simulator timestamp |
+| mission_phase | `uint8` | — | Current flight state-machine phase |
 | position | 3 × `float64` | m | Cartesian x, y, z |
 | velocity | 3 × `float64` | m/s | Cartesian velocity |
 | orientation | 4 × `float32` | — | Normalized quaternion w, x, y, z |

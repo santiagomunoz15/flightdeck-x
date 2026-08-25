@@ -9,8 +9,17 @@ namespace flightdeck::protocol {
 
 inline constexpr std::uint32_t kTelemetryMagic = 0x46445831U;
 inline constexpr std::uint16_t kTelemetryVersion = 1U;
-inline constexpr std::size_t kTelemetryPacketSize = 98U;
-inline constexpr std::size_t kCrcOffset = 94U;
+inline constexpr std::size_t kTelemetryPacketSize = 99U;
+inline constexpr std::size_t kCrcOffset = 95U;
+
+enum class MissionPhase : std::uint8_t {
+  prelaunch = 0,
+  powered_ascent = 1,
+  coast = 2,
+  descent = 3,
+  landing_burn = 4,
+  landed = 5,
+};
 
 static_assert(sizeof(std::uint16_t) == 2);
 static_assert(sizeof(std::uint32_t) == 4);
@@ -24,6 +33,7 @@ struct PackedTelemetryPacket {
   std::array<std::byte, 2> version;
   std::array<std::byte, 4> sequence;
   std::array<std::byte, 8> timestamp_us;
+  std::array<std::byte, 1> mission_phase;
   std::array<std::byte, 24> position_m;
   std::array<std::byte, 24> velocity_mps;
   std::array<std::byte, 16> orientation_wxyz;
@@ -39,6 +49,7 @@ static_assert(sizeof(PackedTelemetryPacket) == kTelemetryPacketSize);
 struct Telemetry {
   std::uint32_t sequence{};
   std::uint64_t timestamp_us{};
+  MissionPhase mission_phase{MissionPhase::prelaunch};
   std::array<double, 3> position_m{};
   std::array<double, 3> velocity_mps{};
   std::array<float, 4> orientation_wxyz{1.0F, 0.0F, 0.0F, 0.0F};
@@ -73,4 +84,3 @@ using TelemetryBytes = std::array<std::byte, kTelemetryPacketSize>;
 [[nodiscard]] DecodeResult deserialize(std::span<const std::byte> bytes) noexcept;
 
 }  // namespace flightdeck::protocol
-

@@ -22,6 +22,7 @@ Telemetry fixture() {
   return {
       .sequence = 0x01020304U,
       .timestamp_us = 0x0102030405060708ULL,
+      .mission_phase = flightdeck::protocol::MissionPhase::coast,
       .position_m = {1.0, -2.0, 3.5},
       .velocity_mps = {4.0, 5.0, -6.0},
       .orientation_wxyz = {1.0F, 0.0F, 0.0F, 0.0F},
