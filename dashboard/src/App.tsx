@@ -22,9 +22,9 @@ function TelemetryChart({ samples }: { samples: TelemetrySample[] }) {
       <div className="panel-heading"><div><span>FLIGHT PROFILE</span><h2>Trajectory telemetry</h2></div><div className="legend"><i className="altitude" />Altitude <i className="velocity" />Velocity</div></div>
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={data} margin={{ top: 12, right: 16, left: -12, bottom: 0 }}>
-          <XAxis dataKey="time" tickFormatter={(value: number) => `${value.toFixed(3)} s`} stroke="#547078" tickLine={false} axisLine={false} />
-          <YAxis yAxisId="alt" tickFormatter={(value: number) => `${value.toFixed(3)} m`} stroke="#547078" tickLine={false} axisLine={false} width={92} />
-          <YAxis yAxisId="vel" orientation="right" tickFormatter={(value: number) => `${value.toFixed(3)} m/s`} stroke="#547078" tickLine={false} axisLine={false} width={104} />
+          <XAxis dataKey="time" tickFormatter={(value: number) => value === 0 ? "0" : `${value.toFixed(1)}s`} stroke="#547078" tickLine={false} axisLine={false} />
+          <YAxis yAxisId="alt" tickFormatter={(value: number) => `${Math.round(value)}m`} stroke="#547078" tickLine={false} axisLine={false} width={64} />
+          <YAxis yAxisId="vel" orientation="right" tickFormatter={(value: number) => `${value.toFixed(1)}m/s`} stroke="#547078" tickLine={false} axisLine={false} width={76} />
           <Tooltip
             contentStyle={{ background: "#0d171c", border: "1px solid #29434b", borderRadius: 2 }}
             labelFormatter={(value) => `T+ ${Number(value).toFixed(3)} s`}
