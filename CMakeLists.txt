@@ -3,4 +3,4 @@ project(FlightDeckX VERSION 0.1.0 LANGUAGES CXX)
 
 enable_testing()
 add_subdirectory(protocol)
-
+add_subdirectory(generator)
