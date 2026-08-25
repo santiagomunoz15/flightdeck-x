@@ -24,4 +24,5 @@ export interface StreamMetrics {
 
 export type ServerMessage =
   | { type: "history"; samples: TelemetrySample[]; metrics: StreamMetrics }
+  | { type: "reset"; metrics: StreamMetrics }
   | { type: "telemetry"; sample: TelemetrySample; metrics: StreamMetrics };

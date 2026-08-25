@@ -27,9 +27,20 @@ export class TelemetryServer {
   }
 
   acceptPacket(packet: Uint8Array): void {
-    this.#metrics.received += 1;
     const result = decodeTelemetry(packet);
-    if (!result.ok) { this.#metrics.rejected += 1; return; }
+    if (!result.ok) {
+      this.#metrics.received += 1;
+      this.#metrics.rejected += 1;
+      return;
+    }
+    if (result.sample.sequence === 0 && this.#sequence.latest !== undefined &&
+        this.#sequence.latest !== 0) {
+      this.#history.clear();
+      this.#sequence.reset();
+      Object.assign(this.#metrics, { received: 0, valid: 0, rejected: 0, lost: 0, reordered: 0 });
+      this.#broadcast({ type: "reset", metrics: this.metrics });
+    }
+    this.#metrics.received += 1;
     this.#metrics.valid += 1;
     this.#sequence.observe(result.sample.sequence);
     this.#metrics.lost = this.#sequence.lost;

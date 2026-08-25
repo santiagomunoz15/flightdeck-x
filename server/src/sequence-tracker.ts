@@ -2,6 +2,12 @@ export class SequenceTracker {
   #latest: number | undefined;
   lost = 0;
   reordered = 0;
+  get latest(): number | undefined { return this.#latest; }
+  reset(): void {
+    this.#latest = undefined;
+    this.lost = 0;
+    this.reordered = 0;
+  }
   observe(sequence: number): void {
     if (this.#latest === undefined) { this.#latest = sequence; return; }
     const delta = (sequence - this.#latest) >>> 0;

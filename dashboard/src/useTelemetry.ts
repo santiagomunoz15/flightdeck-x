@@ -52,8 +52,10 @@ export function useTelemetry(url: string) {
           if (message.type === "history") {
             pending = message.samples.slice(-MAX_CLIENT_SAMPLES);
             replaceWithHistory = true;
-          }
-          else pending.push(message.sample);
+          } else if (message.type === "reset") {
+            pending = [];
+            replaceWithHistory = true;
+          } else pending.push(message.sample);
           pendingMetrics = message.metrics;
           scheduleFlush();
         } catch { /* Ignore malformed server messages. */ }

@@ -7,6 +7,11 @@ export class CircularBuffer<T> {
     this.#items = new Array<T | undefined>(capacity);
   }
   get length(): number { return this.#length; }
+  clear(): void {
+    this.#items.fill(undefined);
+    this.#start = 0;
+    this.#length = 0;
+  }
   push(value: T): void {
     const index = (this.#start + this.#length) % this.capacity;
     this.#items[index] = value;

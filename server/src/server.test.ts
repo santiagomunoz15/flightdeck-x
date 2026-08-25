@@ -15,4 +15,14 @@ describe("TelemetryServer", () => {
     expect(server.metrics).toEqual({ received: 4, valid: 3, rejected: 1, lost: 1, reordered: 0 });
     expect(server.history.map((sample) => sample.sequence)).toEqual([12, 13]);
   });
+
+  it("clears history and metrics when a new simulator run starts", () => {
+    const server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: 5000, wsHost: "127.0.0.1", wsPort: 8080, historyCapacity: 10 });
+    server.acceptPacket(telemetryFixture(100));
+    server.acceptPacket(telemetryFixture(102));
+    server.acceptPacket(telemetryFixture(0));
+
+    expect(server.history.map((sample) => sample.sequence)).toEqual([0]);
+    expect(server.metrics).toEqual({ received: 1, valid: 1, rejected: 0, lost: 0, reordered: 0 });
+  });
 });

@@ -8,5 +8,6 @@ export interface TelemetrySample {
 export interface StreamMetrics { received: number; valid: number; rejected: number; lost: number; reordered: number; }
 export type ServerMessage =
   | { type: "history"; samples: TelemetrySample[]; metrics: StreamMetrics }
+  | { type: "reset"; metrics: StreamMetrics }
   | { type: "telemetry"; sample: TelemetrySample; metrics: StreamMetrics };
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
