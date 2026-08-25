@@ -11,6 +11,13 @@ export function speedMps(sample: TelemetrySample): number {
   return Math.hypot(...sample.velocityMps);
 }
 
+export function startsNewFlight(previous: TelemetrySample | undefined, current: TelemetrySample): boolean {
+  if (!previous) return false;
+  const sequenceRestarted = current.sequence === 0 && previous.sequence !== 0;
+  const simulationClockRestarted = current.timestampUs + 1_000_000 < previous.timestampUs;
+  return sequenceRestarted || simulationClockRestarted;
+}
+
 export function chartSamples(samples: TelemetrySample[], maximum = 360): TelemetrySample[] {
   if (samples.length <= maximum) return samples;
   const stride = Math.ceil(samples.length / maximum);

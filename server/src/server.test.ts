@@ -25,4 +25,13 @@ describe("TelemetryServer", () => {
     expect(server.history.map((sample) => sample.sequence)).toEqual([0]);
     expect(server.metrics).toEqual({ received: 1, valid: 1, rejected: 0, lost: 0, reordered: 0 });
   });
+
+  it("detects a new run from a reset simulation clock when sequence zero is missed", () => {
+    const server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: 5000, wsHost: "127.0.0.1", wsPort: 8080, historyCapacity: 10 });
+    server.acceptPacket(telemetryFixture(500, 10_000_000n));
+    server.acceptPacket(telemetryFixture(7, 70_000n));
+
+    expect(server.history.map((sample) => sample.sequence)).toEqual([7]);
+    expect(server.metrics).toEqual({ received: 1, valid: 1, rejected: 0, lost: 0, reordered: 0 });
+  });
 });

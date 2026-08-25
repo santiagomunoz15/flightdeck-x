@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { startsNewFlight } from "./telemetry-utils";
 import type { ConnectionStatus, ServerMessage, StreamMetrics, TelemetrySample } from "./types";
 
 const EMPTY_METRICS: StreamMetrics = { received: 0, valid: 0, rejected: 0, lost: 0, reordered: 0 };
@@ -20,6 +21,7 @@ export function useTelemetry(url: string) {
     let pending: TelemetrySample[] = [];
     let replaceWithHistory = false;
     let pendingMetrics: StreamMetrics | undefined;
+    let latestSample: TelemetrySample | undefined;
 
     const flush = () => {
       frame = undefined;
@@ -51,11 +53,20 @@ export function useTelemetry(url: string) {
           const message = JSON.parse(String(event.data)) as ServerMessage;
           if (message.type === "history") {
             pending = message.samples.slice(-MAX_CLIENT_SAMPLES);
+            latestSample = pending.at(-1);
             replaceWithHistory = true;
           } else if (message.type === "reset") {
             pending = [];
+            latestSample = undefined;
             replaceWithHistory = true;
-          } else pending.push(message.sample);
+          } else {
+            if (startsNewFlight(latestSample, message.sample)) {
+              pending = [];
+              replaceWithHistory = true;
+            }
+            pending.push(message.sample);
+            latestSample = message.sample;
+          }
           pendingMetrics = message.metrics;
           scheduleFlush();
         } catch { /* Ignore malformed server messages. */ }
