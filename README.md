@@ -1,32 +1,43 @@
 # FlightDeck X
 
-A learning project for building a real-time rocket telemetry and mission-control
-system from first principles.
+A real-time rocket telemetry and mission-control system built from first
+principles. FlightDeck X combines a deterministic C++ flight simulator, a
+versioned binary protocol, UDP telemetry transport, a TypeScript streaming
+service, and a browser-based mission-control dashboard.
 
-The finished system will have four independent layers:
+The system is organized into four independent layers:
 
 ```text
 C++ simulator -> UDP binary packets -> streaming server -> WebSocket -> React UI
 ```
 
-## What you will learn
+## Project goals
 
-- How flight state is represented and updated in a fixed-rate simulation loop
-- How binary packet layouts, sequence numbers, and checksums work
-- How UDP differs from reliable transports such as TCP and WebSockets
-- How a server validates, buffers, and distributes real-time data
-- How quaternions drive a 3D model without Euler-angle singularities
-- How to measure latency, packet loss, render rate, and system health
+FlightDeck X explores the engineering decisions behind real-time telemetry
+systems rather than hiding them behind high-level abstractions. Its main areas
+of focus are:
 
-## Suggested technology stack
+- deterministic flight-state updates in a fixed-rate simulation loop;
+- explicit binary packet layouts with versioning, sequence numbers, and CRCs;
+- the tradeoffs between low-latency UDP and reliable WebSocket transport;
+- validation, bounded buffering, and distribution of live telemetry;
+- quaternion-based 3D orientation without Euler-angle singularities; and
+- measurement of latency, packet loss, render rate, and system health.
+
+The flight model is intentionally simplified. The project emphasizes software
+architecture, data integrity, concurrency, and observability rather than
+high-fidelity aerospace simulation.
+
+## Technology stack
 
 - **Generator:** C++20 and CMake
-- **Wire format:** packed binary structs initially; Protocol Buffers later
+- **Wire format:** versioned, fixed-width binary packets in network byte order
 - **Generator-to-server transport:** UDP
 - **Streaming server:** Node.js, TypeScript, and `ws`
 - **Browser transport:** WebSockets
 - **Dashboard:** React, TypeScript, Vite, React Three Fiber, and Recharts
-- **Repository structure:**
+
+## Repository structure
 
 ```text
 flightdeck-x/
@@ -57,15 +68,15 @@ To run a complete flight without real-time delays after building:
 ./build/generator/flight_simulator --no-realtime
 ```
 
-## Build roadmap
+## Development roadmap
 
-Build one vertical slice at a time. Do not begin with the full dashboard: first
-prove that one packet can travel from the simulator to a terminal.
+Development proceeds through vertical slices, with each milestone producing a
+testable path through another part of the system.
 
 ### Milestone 1: Define one telemetry packet
 
-Create `protocol/telemetry.md` and document every field before writing code.
-Start with:
+The initial protocol contract defines each field before it is consumed by the
+simulator or server:
 
 | Field | Type | Unit | Purpose |
 |---|---:|---|---|
@@ -82,16 +93,17 @@ Start with:
 | fault_flags | `uint32` | bit field | Active simulated faults |
 | crc32 | `uint32` | — | Detects packet corruption |
 
-Decide and record byte order, exact packet size, quaternion ordering, coordinate
-system, and CRC coverage. Network byte order (big-endian) is a good default.
+The contract records byte order, exact packet size, quaternion ordering,
+coordinate system, and CRC coverage. Version 1 uses network byte order
+(big-endian).
 
-**Checkpoint:** Write a tiny program that creates one packet, serializes it,
-deserializes it, and proves every decoded field matches the original.
+**Checkpoint:** A known-byte fixture and round-trip test prove that serialized
+and decoded fields match the contract.
 
 ### Milestone 2: Build the C++ simulation loop
 
-Create a fixed-step loop that runs at 100 Hz (`dt = 0.01 s`). Start with a
-simple vertical flight model rather than a physically complete rocket:
+The simulator uses a fixed-step loop at 100 Hz (`dt = 0.01 s`) and a simple
+vertical flight model rather than a physically complete rocket:
 
 ```text
 acceleration = thrust / mass - gravity
@@ -99,55 +111,54 @@ velocity    += acceleration * dt
 altitude    += velocity * dt
 ```
 
-Represent mission phases as a state machine:
+Mission phases are represented as a state machine:
 
 ```text
 PRELAUNCH -> POWERED_ASCENT -> COAST -> DESCENT -> LANDING_BURN -> LANDED
 ```
 
-Add orientation only after position and velocity behave correctly. Normalize
-the quaternion after every integration step.
+Orientation is represented by a quaternion that is normalized after every
+integration step.
 
-**Checkpoint:** Print one line per second and confirm that altitude, velocity,
-mass, and mission phase change plausibly. The simulation should remain stable
-for several complete flights.
+**Checkpoint:** One-second status samples show plausible altitude, velocity,
+mass, and mission-phase changes across several stable, deterministic flights.
 
 ### Milestone 3: Send and validate UDP packets
 
-Serialize each simulator state and send it to `127.0.0.1:5000`. Build a minimal
-receiver that prints sequence number and altitude. Then add CRC32 validation and
-packet-loss detection:
+Each simulator state is serialized and sent to `127.0.0.1:5000`. A diagnostic
+receiver reports sequence number and altitude while validating CRC32 and
+tracking packet loss:
 
 ```text
 packets_lost = current_sequence - previous_sequence - 1
 ```
 
-Use a single-producer/single-consumer ring buffer between the simulation and
-network threads. The simulation thread should never wait for the network.
+A bounded single-producer/single-consumer ring buffer separates the simulation
+and network threads so network delays cannot block the simulation loop.
 
-**Checkpoint:** Run for five minutes at 100 Hz. Record packets sent, received,
-rejected, and lost. Intentionally corrupt a packet and confirm it is rejected.
+**Checkpoint:** A sustained 100 Hz run records packets sent, received, rejected,
+and lost. Deliberately corrupted packets are rejected.
 
 ### Milestone 4: Create the streaming server
 
-Build a TypeScript server that:
+The TypeScript server will:
 
-1. Listens for UDP telemetry on port 5000.
-2. Checks packet size, magic, version, CRC, and sequence number.
-3. Decodes valid packets into a typed internal object.
-4. Stores the most recent 30–60 seconds in a bounded circular buffer.
-5. Serves WebSocket clients on port 8080.
-6. Sends buffered history when a client connects, then streams live updates.
+1. Listen for UDP telemetry on port 5000.
+2. Check packet size, magic, version, CRC, and sequence number.
+3. Decode valid packets into a typed internal object.
+4. Store the most recent 30–60 seconds in a bounded circular buffer.
+5. Serve WebSocket clients on port 8080.
+6. Send buffered history when a client connects, then stream live updates.
 
-Keep UDP input binary. JSON over the browser WebSocket is acceptable for the
-first version because it is easy to inspect; optimize it only after measuring.
+UDP input remains binary. The first browser-facing WebSocket format uses JSON
+for inspectability and will only be optimized if measurements justify it.
 
-**Checkpoint:** Open two browser tabs and confirm both receive live data and an
-immediate history backfill without affecting the simulator rate.
+**Checkpoint:** Two browser clients receive live data and immediate history
+backfill without affecting the simulator rate.
 
 ### Milestone 5: Build the dashboard incrementally
 
-Implement the UI in this order:
+The interface is developed in this order:
 
 1. Connection badge and last-packet timestamp
 2. Numeric altitude, speed, and mission-phase readouts
@@ -156,57 +167,37 @@ Implement the UI in this order:
 5. Green/amber/red engine and sensor-health indicators
 6. Packet loss, end-to-end latency, and rendering FPS metrics
 
-Do not convert the quaternion to Euler angles for rendering. With Three.js,
-assign the received normalized quaternion directly to the model.
+The received normalized quaternion is applied directly to the Three.js model
+without conversion to Euler angles.
 
-**Checkpoint:** Disconnect and restart the server. The UI should visibly enter
-a disconnected state, reconnect automatically, and resume without refreshing.
+**Checkpoint:** When the server disconnects, the UI enters a visible disconnected
+state, reconnects automatically, and resumes without a page refresh.
 
 ### Milestone 6: Add fault injection
 
-Add a command path from UI to server to simulator. Begin with three deterministic
+A command path from UI to server to simulator introduces three deterministic
 faults:
 
 - Thruster loss: reduce available thrust by 40%
 - Sensor noise: add seeded noise to one measurement
 - Packet loss: deliberately drop every Nth transmitted packet
 
-Every command should have an ID, timestamp, acknowledgement, and visible effect.
-Keep the true simulated state separate from the noisy sensor measurement so the
+Every command has an ID, timestamp, acknowledgement, and visible effect. True
+simulation state remains separate from noisy sensor measurements so the
 difference is observable.
 
-**Checkpoint:** Trigger each fault and verify the packet flags, health panel,
-plots, and recovery behavior all agree.
+**Checkpoint:** Packet flags, health indicators, plots, and recovery behavior
+remain consistent for every injected fault.
 
-## First working session
+## Engineering principles
 
-For the first session, complete only Milestone 1:
-
-1. Install CMake, a C++20 compiler, Node.js LTS, and Git.
-2. Create the five top-level folders shown above.
-3. Write `protocol/telemetry.md` with the exact packet contract.
-4. Define the matching packed C++ struct.
-5. Add compile-time assertions for primitive widths and total packet size.
-6. Write a round-trip serialization test.
-7. Commit the result before starting the simulator.
-
-Useful questions to answer in `docs/decisions.md`:
-
-- Why use UDP between the simulator and server?
-- What data loss is acceptable, and what must be reliable?
-- Which clock is used to measure latency?
-- What happens when an unknown protocol version arrives?
-- How does a consumer distinguish missing packets from reordered packets?
-
-## Engineering habits
-
-- Keep units in field names or documentation; never rely on memory.
-- Use a monotonic clock for durations and a wall clock only for display.
-- Bound every queue and history buffer so memory cannot grow indefinitely.
-- Separate truth state, sensor state, and displayed state.
-- Test serialization with known byte fixtures, not only round trips.
-- Measure before optimizing and save benchmark results in `docs/`.
-- Commit each passing milestone so experiments are easy to undo.
+- Units remain explicit in field names and protocol documentation.
+- Monotonic clocks measure durations; wall clocks are reserved for display.
+- Every queue and history buffer is bounded.
+- Truth state, sensor state, and displayed state remain separate.
+- Serialization is tested against known byte fixtures as well as round trips.
+- Measurements guide optimization, with results recorded in `docs/`.
+- Passing milestones are captured in focused commits.
 
 ## Definition of done
 
