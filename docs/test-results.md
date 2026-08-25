@@ -57,3 +57,20 @@ ctest --test-dir /tmp/flightdeck-x-cmake-build --output-on-failure
 All targets compiled without warnings and all three registered tests passed.
 The CMake-built simulator and receiver then reproduced the 500-packet UDP
 result recorded above.
+
+## Milestones 4 and 5: server and dashboard
+
+The TypeScript server and React dashboard passed strict production builds. The
+server test suite covers binary decoding, CRC validation, bounded history,
+sequence gaps, and a live UDP-to-WebSocket test with two clients. The second
+client received three buffered samples immediately, then both clients received
+the next live sample.
+
+The production-built server was also tested against the actual C++ simulator at
+100 Hz. A WebSocket probe received all 200 transmitted packets in order, from
+sequence 0 (`PRELAUNCH`) through sequence 199 (`POWERED_ASCENT`), with no queue
+drops or send errors.
+
+The dashboard production build and telemetry-helper tests passed. Its client
+history is bounded at 6,000 samples, chart data is decimated for rendering, and
+incoming 100 Hz messages are batched to animation frames.

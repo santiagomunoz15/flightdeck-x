@@ -68,6 +68,25 @@ To run a complete flight without real-time delays after building:
 ./build/generator/flight_simulator --no-realtime
 ```
 
+Install the JavaScript dependencies once from the repository root:
+
+```sh
+npm install
+```
+
+For the complete live system, start each process in its own terminal:
+
+```sh
+npm run dev:server
+npm run dev:dashboard
+./build/generator/flight_simulator
+```
+
+The dashboard is available at `http://127.0.0.1:5173`. The server listens for
+simulator UDP packets on port 5000 and serves browser WebSocket clients on port
+8080. New clients receive up to 60 seconds of buffered history before live
+streaming begins.
+
 ## Development roadmap
 
 Development proceeds through vertical slices, with each milestone producing a

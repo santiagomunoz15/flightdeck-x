@@ -41,6 +41,7 @@ export class TelemetryServer {
   get metrics(): StreamMetrics { return { ...this.#metrics }; }
   get history(): TelemetrySample[] { return this.#history.toArray(); }
   async stop(): Promise<void> {
+    for (const client of this.#websocket?.clients ?? []) client.terminate();
     await Promise.all([
       new Promise<void>((resolve) => this.#udp?.close(() => resolve()) ?? resolve()),
       new Promise<void>((resolve) => this.#websocket?.close(() => resolve()) ?? resolve()),
