@@ -37,6 +37,20 @@ flightdeck-x/
   docs/           Architecture notes and test results
 ```
 
+## Build and test
+
+Milestone 1 requires CMake 3.20 or newer and a C++20 compiler:
+
+```sh
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+See [`protocol/telemetry.md`](protocol/telemetry.md) for the version 1 wire
+contract and [`docs/decisions.md`](docs/decisions.md) for the engineering
+decisions behind it.
+
 ## Build roadmap
 
 Build one vertical slice at a time. Do not begin with the full dashboard: first
