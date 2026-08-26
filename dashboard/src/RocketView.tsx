@@ -2,11 +2,16 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import type { Group } from "three";
 
-function Rocket({ orientation }: { orientation: [number, number, number, number] }) {
+function Rocket({ orientation, position }: { orientation: [number, number, number, number]; position: [number, number, number] }) {
   const group = useRef<Group>(null);
   useFrame(() => {
     const [w, x, y, z] = orientation;
-    group.current?.quaternion.set(x, y, z, w).normalize();
+    if (group.current) {
+      group.current.quaternion.set(x, y, z, w).normalize();
+      // Telemetry is East-North-Up; Three.js uses Y as its vertical display axis.
+      const displayAltitude = Math.min(Math.max(position[2], 0), 2500) / 2500;
+      group.current.position.set(position[0] / 1000, -0.65 + displayAltitude * 1.7, -position[1] / 1000);
+    }
   });
   return (
     <group ref={group} rotation={[Math.PI / 18, 0, -Math.PI / 12]}>
@@ -18,17 +23,23 @@ function Rocket({ orientation }: { orientation: [number, number, number, number]
   );
 }
 
-export function RocketView({ orientation, active }: { orientation: [number, number, number, number]; active: boolean }) {
+export function RocketView({ orientation, position, active }: { orientation: [number, number, number, number]; position: [number, number, number]; active: boolean }) {
   return (
     <div className="rocket-view" aria-label="Quaternion-driven rocket orientation">
       <Canvas camera={{ position: [4.6, 2.4, 5.2], fov: 35 }} dpr={[1, 1.5]}>
         <color attach="background" args={["#0a1014"]} />
         <ambientLight intensity={1.2} /><directionalLight position={[4, 6, 5]} intensity={3.5} color="#e8f6ff" />
         <pointLight position={[-3, -2, 3]} intensity={active ? 5 : 1.5} color="#e86c3e" />
-        <Rocket orientation={orientation} />
+        <Rocket orientation={orientation} position={position} />
         <gridHelper args={[10, 20, "#1a4d57", "#10272d"]} position={[0, -1.35, 0]} />
       </Canvas>
       <span className="view-label">ATTITUDE / BODY FRAME</span>
+      <div className="position-overlay">
+        <span>ENU POSITION</span>
+        <b>X {position[0].toFixed(3)}m</b>
+        <b>Y {position[1].toFixed(3)}m</b>
+        <b>Z {position[2].toFixed(3)}m</b>
+      </div>
     </div>
   );
 }
