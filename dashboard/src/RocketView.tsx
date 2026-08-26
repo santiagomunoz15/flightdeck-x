@@ -1,13 +1,21 @@
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef } from "react";
-import { BufferGeometry, Group, Line as ThreeLine, LineBasicMaterial, Vector3 } from "three";
+import { Box3, BufferGeometry, Group, Line as ThreeLine, LineBasicMaterial, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 type Position = [number, number, number];
 
+const MAX_DISPLAY_ALTITUDE_M = 2500;
+const ROCKET_HEIGHT_M = 50;
+const ROCKET_DISPLAY_HEIGHT = 1.2;
+const ROCKET_DISPLAY_SCALE = ROCKET_DISPLAY_HEIGHT / ROCKET_HEIGHT_M;
+const ALTITUDE_DISPLAY_TRAVEL = 2.6;
+const GROUND_Y = -1.35;
+
 function scenePosition(position: Position): Vector3 {
-  const displayAltitude = Math.min(Math.max(position[2], 0), 2500) / 2500;
-  return new Vector3(position[0] / 1000, -0.65 + displayAltitude * 1.7, -position[1] / 1000);
+  const displayAltitude = Math.min(Math.max(position[2], 0), MAX_DISPLAY_ALTITUDE_M) / MAX_DISPLAY_ALTITUDE_M;
+  const landedRocketCenter = GROUND_Y + ROCKET_DISPLAY_HEIGHT / 2;
+  return new Vector3(position[0] / 1000, landedRocketCenter + displayAltitude * ALTITUDE_DISPLAY_TRAVEL, -position[1] / 1000);
 }
 
 function TrajectoryTrail({ positions }: { positions: Position[] }) {
@@ -37,7 +45,17 @@ function FallbackRocket() {
 function FlightModel() {
   const { scene } = useLoader(GLTFLoader, "/models/Falcon9.glb");
   const model = useMemo(() => scene.clone(true), [scene]);
-  return <primitive object={model} scale={0.055} position={[0, -1.3, 0]} />;
+  const modelOffset = useMemo(
+    () => new Box3().setFromObject(model).getCenter(new Vector3()).multiplyScalar(-ROCKET_DISPLAY_SCALE),
+    [model],
+  );
+  return (
+    <primitive
+      object={model}
+      scale={ROCKET_DISPLAY_SCALE}
+      position={modelOffset}
+    />
+  );
 }
 
 function Rocket({ orientation, position }: { orientation: [number, number, number, number]; position: Position }) {
@@ -68,7 +86,7 @@ export function RocketView({ orientation, position, trail, active }: { orientati
         <pointLight position={[-3, -2, 3]} intensity={active ? 5 : 1.5} color="#e86c3e" />
         <TrajectoryTrail positions={trail} />
         <Rocket orientation={orientation} position={position} />
-        <gridHelper args={[10, 20, "#1a4d57", "#10272d"]} position={[0, -1.35, 0]} />
+        <gridHelper args={[10, 20, "#1a4d57", "#10272d"]} position={[0, GROUND_Y, 0]} />
       </Canvas>
       <span className="view-label">ATTITUDE / BODY FRAME</span>
       <div className="position-overlay">
