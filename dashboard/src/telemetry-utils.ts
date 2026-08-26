@@ -18,6 +18,22 @@ export function startsNewFlight(previous: TelemetrySample | undefined, current: 
   return sequenceRestarted || simulationClockRestarted;
 }
 
+export function shouldRetainSample(previous: TelemetrySample | undefined, current: TelemetrySample, stride = 5): boolean {
+  return !previous || current.sequence % stride === 0 ||
+    current.missionPhase !== previous.missionPhase ||
+    current.faultFlags !== previous.faultFlags || current.missionPhase === "LANDED";
+}
+
+export function displaySamples(samples: TelemetrySample[], stride = 5): TelemetrySample[] {
+  const retained: TelemetrySample[] = [];
+  for (const sample of samples) {
+    if (shouldRetainSample(retained.at(-1), sample, stride)) retained.push(sample);
+  }
+  const latest = samples.at(-1);
+  if (latest && retained.at(-1) !== latest) retained.push(latest);
+  return retained;
+}
+
 export function chartSamples(samples: TelemetrySample[], maximum = 360): TelemetrySample[] {
   if (samples.length <= maximum) return samples;
   const stride = Math.ceil(samples.length / maximum);

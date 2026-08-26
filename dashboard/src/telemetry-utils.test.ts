@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chartSamples, dynamicPressureKpa, speedMps, startsNewFlight } from "./telemetry-utils";
+import { chartSamples, displaySamples, dynamicPressureKpa, speedMps, startsNewFlight } from "./telemetry-utils";
 import type { TelemetrySample } from "./types";
 
 const sample = (sequence: number): TelemetrySample => ({ sequence, timestampUs: sequence * 10_000, missionPhase: "COAST", positionM: [0, 0, 0], velocityMps: [3, 4, 0], orientationWxyz: [1, 0, 0, 0], thrustPercent: 0, chamberPressureMpa: 0, faultFlags: 0, truthPositionM: [0, 0, 0], truthVelocityMps: [3, 4, 0], serverReceivedAtMs: 0 });
@@ -20,5 +20,13 @@ describe("telemetry helpers", () => {
     expect(startsNewFlight(previous, sample(0))).toBe(true);
     expect(startsNewFlight(previous, { ...sample(7), timestampUs: 70_000 })).toBe(true);
     expect(startsNewFlight(previous, { ...sample(6903), timestampUs: 69_040_000 })).toBe(false);
+  });
+  it("reduces retained telemetry while preserving transitions and the latest sample", () => {
+    const values = Array.from({ length: 103 }, (_, index) => sample(index));
+    values[47] = { ...sample(47), missionPhase: "DESCENT" };
+    const result = displaySamples(values, 5);
+    expect(result.length).toBeLessThan(30);
+    expect(result.some((value) => value.sequence === 47)).toBe(true);
+    expect(result.at(-1)?.sequence).toBe(102);
   });
 });

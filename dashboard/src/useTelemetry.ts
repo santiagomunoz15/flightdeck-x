@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { startsNewFlight } from "./telemetry-utils";
+import { displaySamples, shouldRetainSample, startsNewFlight } from "./telemetry-utils";
 import type { CommandState, ConnectionStatus, FaultType, ServerMessage, StreamMetrics, TelemetrySample } from "./types";
 
 const EMPTY_METRICS: StreamMetrics = { received: 0, valid: 0, rejected: 0, lost: 0, reordered: 0 };
-const MAX_CLIENT_SAMPLES = 6000;
+const MAX_CLIENT_SAMPLES = 2000;
 
 export function useTelemetry(url: string) {
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
@@ -25,10 +25,11 @@ export function useTelemetry(url: string) {
     let replaceWithHistory = false;
     let pendingMetrics: StreamMetrics | undefined;
     let latestSample: TelemetrySample | undefined;
+    let latestRetainedSample: TelemetrySample | undefined;
 
     const flush = () => {
       frame = undefined;
-      if (pending.length > 0) {
+      if (replaceWithHistory || pending.length > 0) {
         const incoming = pending;
         pending = [];
         const latest = incoming.at(-1);
@@ -40,6 +41,9 @@ export function useTelemetry(url: string) {
           const now = Date.now();
           setLastPacketAt(now);
           setTransportLatencyMs(Math.max(0, now - latest.serverReceivedAtMs));
+        } else {
+          setLastPacketAt(undefined);
+          setTransportLatencyMs(0);
         }
       }
       if (pendingMetrics) { setMetrics(pendingMetrics); pendingMetrics = undefined; }
@@ -74,19 +78,25 @@ export function useTelemetry(url: string) {
             return;
           }
           if (message.type === "history") {
-            pending = message.samples.slice(-MAX_CLIENT_SAMPLES);
-            latestSample = pending.at(-1);
+            latestSample = message.samples.at(-1);
+            pending = displaySamples(message.samples).slice(-MAX_CLIENT_SAMPLES);
+            latestRetainedSample = pending.at(-1);
             replaceWithHistory = true;
           } else if (message.type === "reset") {
             pending = [];
             latestSample = undefined;
+            latestRetainedSample = undefined;
             replaceWithHistory = true;
           } else {
             if (startsNewFlight(latestSample, message.sample)) {
               pending = [];
+              latestRetainedSample = undefined;
               replaceWithHistory = true;
             }
-            pending.push(message.sample);
+            if (shouldRetainSample(latestRetainedSample, message.sample)) {
+              pending.push(message.sample);
+              latestRetainedSample = message.sample;
+            }
             latestSample = message.sample;
           }
           pendingMetrics = message.metrics;

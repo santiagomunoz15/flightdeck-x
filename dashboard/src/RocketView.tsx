@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef } from "react";
-import { Box3, BufferGeometry, Group, Line as ThreeLine, LineBasicMaterial, Mesh, Object3D, Quaternion, Vector3 } from "three";
+import { Box3, BufferGeometry, Float32BufferAttribute, Group, Line as ThreeLine, LineBasicMaterial, Mesh, Object3D, Quaternion, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 type Position = [number, number, number];
@@ -10,6 +10,7 @@ const FULL_THRUST_PLUME_LENGTH_M = 70;
 const CAMERA_FOV_DEGREES = 35;
 const GROUND_Y = 0;
 const LANDING_TARGET_EAST_M = 1000;
+const MAX_TRAIL_POINTS = 512;
 
 function scenePosition(position: Position): Vector3 {
   return new Vector3(position[0], Math.max(position[2], GROUND_Y), -position[1]);
@@ -17,10 +18,24 @@ function scenePosition(position: Position): Vector3 {
 
 function TrajectoryTrail({ positions }: { positions: Position[] }) {
   const trail = useMemo(() => {
-    const geometry = new BufferGeometry().setFromPoints(positions.map(scenePosition));
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new Float32BufferAttribute(new Float32Array(MAX_TRAIL_POINTS * 3), 3));
+    geometry.setDrawRange(0, 0);
     const material = new LineBasicMaterial({ color: "#67d6c7", transparent: true, opacity: 0.68 });
     return new ThreeLine(geometry, material);
-  }, [positions]);
+  }, []);
+  useEffect(() => {
+    const attribute = trail.geometry.getAttribute("position") as Float32BufferAttribute;
+    const count = Math.min(positions.length, MAX_TRAIL_POINTS);
+    const offset = positions.length - count;
+    for (let index = 0; index < count; index += 1) {
+      const position = positions[offset + index];
+      if (position) attribute.setXYZ(index, position[0], Math.max(position[2], GROUND_Y), -position[1]);
+    }
+    attribute.needsUpdate = true;
+    trail.geometry.setDrawRange(0, count);
+    trail.geometry.computeBoundingSphere();
+  }, [positions, trail]);
   useEffect(() => () => {
     trail.geometry.dispose();
     (trail.material as LineBasicMaterial).dispose();
