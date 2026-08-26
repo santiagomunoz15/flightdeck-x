@@ -130,6 +130,13 @@ npm run dev:dashboard
 ./build/generator/flight_simulator
 ```
 
+Alternatively, after the C++ build exists, launch and supervise all three
+processes with one command:
+
+```sh
+npm run demo
+```
+
 The dashboard is available at `http://127.0.0.1:5173`. The server listens for
 simulator UDP packets on port 5000 and serves browser WebSocket clients on port
 8080. New clients receive up to 60 seconds of buffered history before live

@@ -24,6 +24,9 @@ npm run dev:dashboard
 Open `http://127.0.0.1:5173` and confirm that telemetry is waiting and the
 simulator control status reads `SIM OFFLINE`.
 
+For a single-command rehearsal instead, run `npm run demo`; it supervises all
+three processes and shuts them down when the flight ends.
+
 ## Record
 
 1. Start `./build/generator/flight_simulator`. Point out that both links become
@@ -31,7 +34,8 @@ simulator control status reads `SIM OFFLINE`.
 2. During powered ascent, show altitude, velocity, chamber pressure, the 3D
    trajectory trail, and the `LIFTOFF` event.
 3. Arm **Sensor Noise** for several seconds. Show its acknowledgement, noisy
-   plots, event marker, and health warning; then clear it.
+   measured traces separating from dashed truth, non-zero residuals, the event
+   marker, and health warning; then clear it.
 4. Arm **Packet Loss**. Show every tenth sequence disappear and the loss counter
    increase while the simulation and UI continue updating; then clear it.
 5. Arm **Thruster Loss** during a powered phase. Show acknowledgement, fault flag

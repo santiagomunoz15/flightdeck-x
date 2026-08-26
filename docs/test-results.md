@@ -89,3 +89,16 @@ Sensor noise is deterministic and is applied only while creating telemetry, so
 the underlying physics state remains unchanged. Packet loss preserves sequence
 increments while omitting every tenth transmission, allowing downstream loss
 metrics to observe the fault.
+
+## Truth-state comparison and mission outcomes
+
+The telemetry contract was extended to 147 bytes by appending noise-free truth
+position and velocity vectors without moving existing fields. C++ round-trip
+tests and the independent TypeScript decoder fixture both validate the updated
+layout and CRC coverage.
+
+Dashboard tests verify measured-versus-truth calculations and touchdown
+classification. A final truth descent rate up to 3 m/s is a soft touchdown,
+up to 8 m/s is a hard landing, and a higher rate is classified as vehicle
+impact. During sensor-noise injection, dashed truth traces remain smooth while
+measured traces and residual readouts expose the deterministic error.
