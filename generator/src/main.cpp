@@ -1,8 +1,10 @@
+#include "flightdeck/control_server.hpp"
 #include "flightdeck/flight_simulation.hpp"
 #include "flightdeck/telemetry.hpp"
 #include "flightdeck/udp_transmitter.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
@@ -29,10 +31,11 @@ flightdeck::protocol::MissionPhase wire_phase(MissionPhase phase) {
 }
 
 flightdeck::protocol::Telemetry make_telemetry(
-    const flightdeck::simulation::FlightState& state, std::uint32_t sequence) {
+    const flightdeck::simulation::FlightState& state, std::uint32_t sequence,
+    std::uint32_t fault_flags) {
   const float thrust_percent = static_cast<float>(
       state.thrust_n / 300'000.0 * 100.0);
-  return {
+  auto telemetry = flightdeck::protocol::Telemetry{
       .sequence = sequence,
       .timestamp_us = static_cast<std::uint64_t>(state.simulation_time_s * 1'000'000.0),
       .mission_phase = wire_phase(state.phase),
@@ -46,15 +49,21 @@ flightdeck::protocol::Telemetry make_telemetry(
       },
       .thrust_percent = thrust_percent,
       .chamber_pressure_mpa = thrust_percent * 0.12F,
-      .fault_flags = 0,
+      .fault_flags = fault_flags,
   };
+  if ((fault_flags & flightdeck::generator::kSensorNoise) != 0U) {
+    telemetry.position_m[2] += std::sin(static_cast<double>(sequence) * 0.173) * 8.0;
+    telemetry.velocity_mps[2] += std::sin(static_cast<double>(sequence) * 0.311) * 1.5;
+  }
+  return telemetry;
 }
 
 void print_usage(std::string_view program) {
   std::cout << "Usage: " << program
-            << " [--no-realtime] [--no-network] [--corrupt-once] [--max-steps COUNT]\n"
+            << " [--no-realtime] [--no-network] [--no-control] [--corrupt-once] [--max-steps COUNT]\n"
             << "  --no-realtime  Run without wall-clock delays\n"
             << "  --no-network   Do not transmit UDP telemetry\n"
+            << "  --no-control   Do not listen for fault commands on TCP port 5001\n"
             << "  --corrupt-once Corrupt packet 250 to exercise receiver validation\n"
             << "  --max-steps N  Stop after N simulation steps (useful for tests)\n";
 }
@@ -75,6 +84,7 @@ int main(int argc, char* argv[]) {
   bool realtime = true;
   bool network_enabled = true;
   bool corrupt_once = false;
+  bool control_enabled = true;
   std::uint64_t maximum_steps = 0;
   for (int i = 1; i < argc; ++i) {
     const std::string_view argument{argv[i]};
@@ -82,6 +92,8 @@ int main(int argc, char* argv[]) {
       realtime = false;
     } else if (argument == "--no-network") {
       network_enabled = false;
+    } else if (argument == "--no-control") {
+      control_enabled = false;
     } else if (argument == "--corrupt-once") {
       corrupt_once = true;
     } else if (argument == "--max-steps" && i + 1 < argc) {
@@ -97,6 +109,12 @@ int main(int argc, char* argv[]) {
   }
 
   FlightSimulation simulation;
+  flightdeck::generator::ControlServer control_server;
+  if (control_enabled && !control_server.start()) {
+    std::cerr << "Unable to start control server: "
+              << control_server.error_message() << '\n';
+    return 1;
+  }
   flightdeck::generator::UdpTransmitter transmitter{"127.0.0.1", 5000};
   if (network_enabled && !transmitter.start()) {
     std::cerr << "Unable to start UDP transmitter: "
@@ -115,14 +133,20 @@ int main(int argc, char* argv[]) {
       std::this_thread::sleep_until(next_step);
     }
 
+    const std::uint32_t fault_flags = control_server.fault_flags();
+    simulation.set_thruster_loss(
+        (fault_flags & flightdeck::generator::kThrusterLoss) != 0U);
     simulation.step(kFixedStepSeconds);
     ++step_count;
     const auto& state = simulation.state();
     if (network_enabled) {
       auto packet = flightdeck::protocol::serialize(
-          make_telemetry(state, static_cast<std::uint32_t>(step_count - 1U)));
+          make_telemetry(state, static_cast<std::uint32_t>(step_count - 1U), fault_flags));
       if (corrupt_once && step_count == 250U) packet[20] ^= std::byte{0x01};
-      static_cast<void>(transmitter.try_send(packet));
+      const bool intentional_drop =
+          (fault_flags & flightdeck::generator::kPacketLoss) != 0U &&
+          step_count % 10U == 0U;
+      if (!intentional_drop) static_cast<void>(transmitter.try_send(packet));
     }
     const bool one_second_elapsed = step_count % 100U == 0U;
     const bool phase_changed = state.phase != last_printed_phase;
@@ -133,6 +157,7 @@ int main(int argc, char* argv[]) {
   }
 
   transmitter.stop();
+  control_server.stop();
   const auto network_stats = transmitter.stats();
 
   std::cout << (simulation.state().phase == MissionPhase::landed

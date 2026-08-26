@@ -30,7 +30,8 @@ void FlightSimulation::transition_to(MissionPhase next) noexcept {
 bool FlightSimulation::should_start_landing_burn() const noexcept {
   if (state_.velocity_mps >= 0.0) return false;
   const double maximum_upward_acceleration =
-      config_.maximum_thrust_n / state_.mass_kg - config_.gravity_mps2;
+      config_.maximum_thrust_n * (thruster_loss_ ? 0.6 : 1.0) /
+          state_.mass_kg - config_.gravity_mps2;
   if (maximum_upward_acceleration <= 0.0) return true;
   const double stopping_distance = state_.velocity_mps * state_.velocity_mps /
                                    (2.0 * maximum_upward_acceleration);
@@ -68,7 +69,7 @@ void FlightSimulation::step(double dt_s) noexcept {
       }
       break;
     case MissionPhase::powered_ascent: {
-      state_.thrust_n = config_.maximum_thrust_n;
+      state_.thrust_n = config_.maximum_thrust_n * (thruster_loss_ ? 0.6 : 1.0);
       const double propellant_available = state_.mass_kg - config_.dry_mass_kg;
       const double propellant_used = std::min(
           propellant_available, config_.ascent_mass_flow_kgps * dt_s);
@@ -104,7 +105,7 @@ void FlightSimulation::step(double dt_s) noexcept {
               : 0.0;
       state_.thrust_n = std::clamp(
           state_.mass_kg * (config_.gravity_mps2 + desired_upward_acceleration),
-          0.0, config_.maximum_thrust_n);
+          0.0, config_.maximum_thrust_n * (thruster_loss_ ? 0.6 : 1.0));
       state_.acceleration_mps2 = state_.thrust_n / state_.mass_kg -
                                  config_.gravity_mps2;
       state_.velocity_mps += state_.acceleration_mps2 * dt_s;

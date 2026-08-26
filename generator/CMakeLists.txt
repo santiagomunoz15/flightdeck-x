@@ -7,7 +7,7 @@ target_compile_features(flightdeck_simulation PUBLIC cxx_std_20)
 add_executable(flight_simulator src/main.cpp)
 target_link_libraries(flight_simulator PRIVATE flightdeck_simulation Threads::Threads)
 
-add_library(flightdeck_network src/udp_transmitter.cpp)
+add_library(flightdeck_network src/udp_transmitter.cpp src/control_server.cpp)
 target_include_directories(flightdeck_network PUBLIC include)
 target_link_libraries(flightdeck_network PUBLIC flightdeck_protocol Threads::Threads)
 target_compile_features(flightdeck_network PUBLIC cxx_std_20)

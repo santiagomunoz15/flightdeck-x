@@ -46,6 +46,7 @@ class FlightSimulation {
  public:
   explicit FlightSimulation(FlightConfig config = {});
   void step(double dt_s = kFixedStepSeconds) noexcept;
+  void set_thruster_loss(bool enabled) noexcept { thruster_loss_ = enabled; }
 
   [[nodiscard]] const FlightState& state() const noexcept { return state_; }
   [[nodiscard]] const FlightConfig& config() const noexcept { return config_; }
@@ -57,6 +58,7 @@ class FlightSimulation {
 
   FlightConfig config_;
   FlightState state_;
+  bool thruster_loss_{};
 };
 
 }  // namespace flightdeck::simulation

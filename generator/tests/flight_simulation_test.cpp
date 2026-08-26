@@ -92,10 +92,25 @@ void test_complete_flight_is_deterministic() {
   }
 }
 
+void test_thruster_loss_reduces_acceleration() {
+  FlightSimulation nominal;
+  FlightSimulation degraded;
+  degraded.set_thruster_loss(true);
+  for (int step = 0; step < 300; ++step) {
+    nominal.step();
+    degraded.step();
+  }
+  require(degraded.state().thrust_n == nominal.state().thrust_n * 0.6,
+          "thruster-loss fault did not reduce available thrust by 40 percent");
+  require(degraded.state().altitude_m < nominal.state().altitude_m,
+          "thruster-loss trajectory did not diverge from nominal");
+}
+
 }  // namespace
 
 int main() {
   test_prelaunch_is_stationary();
   test_complete_flight_is_deterministic();
+  test_thruster_loss_reduces_acceleration();
   std::cout << "All flight simulation tests passed\n";
 }
