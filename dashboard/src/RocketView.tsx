@@ -37,13 +37,40 @@ function FallbackRocket() {
   );
 }
 
-function FlightModel() {
+function FlightModel({ thrustPercent }: { thrustPercent: number }) {
   const { scene } = useLoader(GLTFLoader, "/models/Falcon9.glb");
   const model = useMemo(() => scene.clone(true), [scene]);
-  const modelOffset = useMemo(
-    () => new Box3().setFromObject(model).getCenter(new Vector3()).multiplyScalar(-1),
-    [model],
-  );
+  const { modelOffset, plume, plumeScale } = useMemo(() => {
+    const exhaust = model.getObjectByName("Exhaust Plume");
+    const exhaustParent = exhaust?.parent;
+    if (exhaust && exhaustParent) exhaustParent.remove(exhaust);
+
+    const bounds = new Box3().setFromObject(model);
+    const center = bounds.getCenter(new Vector3());
+
+    if (exhaust && exhaustParent) exhaustParent.add(exhaust);
+    if (exhaust) exhaust.visible = false;
+
+    return {
+      modelOffset: new Vector3(-center.x, -bounds.min.y, -center.z),
+      plume: exhaust,
+      plumeScale: exhaust?.scale.clone(),
+    };
+  }, [model]);
+
+  useFrame(({ clock }) => {
+    if (!plume || !plumeScale) return;
+    const thrust = Math.min(Math.max(thrustPercent, 0), 100) / 100;
+    plume.visible = thrust > 0.005;
+    if (!plume.visible) return;
+    const flicker = 1 + Math.sin(clock.elapsedTime * 31) * 0.055 + Math.sin(clock.elapsedTime * 47) * 0.025;
+    plume.scale.set(
+      plumeScale.x * flicker,
+      plumeScale.y * (0.3 + thrust * 0.7) * flicker,
+      plumeScale.z * flicker,
+    );
+  });
+
   return (
     <primitive
       object={model}
@@ -53,7 +80,7 @@ function FlightModel() {
   );
 }
 
-function Rocket({ orientation, position }: { orientation: [number, number, number, number]; position: Position }) {
+function Rocket({ orientation, position, thrustPercent }: { orientation: [number, number, number, number]; position: Position; thrustPercent: number }) {
   const group = useRef<Group>(null);
   useFrame(() => {
     const [w, x, y, z] = orientation;
@@ -61,13 +88,12 @@ function Rocket({ orientation, position }: { orientation: [number, number, numbe
       group.current.quaternion.set(x, y, z, w).normalize();
       // Telemetry is East-North-Up; Three.js uses Y as its vertical display axis.
       group.current.position.copy(scenePosition(position));
-      group.current.position.y += ROCKET_HEIGHT_M / 2;
     }
   });
   return (
     <group ref={group}>
       <Suspense fallback={<FallbackRocket />}>
-        <FlightModel />
+        <FlightModel thrustPercent={thrustPercent} />
       </Suspense>
     </group>
   );
@@ -104,15 +130,15 @@ function FlightCamera({ position }: { position: Position }) {
   return null;
 }
 
-export function RocketView({ orientation, position, trail, active }: { orientation: [number, number, number, number]; position: Position; trail: Position[]; active: boolean }) {
+export function RocketView({ orientation, position, trail, thrustPercent }: { orientation: [number, number, number, number]; position: Position; trail: Position[]; thrustPercent: number }) {
   return (
     <div className="rocket-view" aria-label="Quaternion-driven rocket orientation">
       <Canvas camera={{ position: [90, 45, 130], fov: CAMERA_FOV_DEGREES, near: 0.1, far: 20000 }} dpr={[1, 1.5]}>
         <color attach="background" args={["#0a1014"]} />
         <ambientLight intensity={1.2} /><directionalLight position={[4, 6, 5]} intensity={3.5} color="#e8f6ff" />
-        <pointLight position={[-3, -2, 3]} intensity={active ? 5 : 1.5} color="#e86c3e" />
+        <pointLight position={[-3, -2, 3]} intensity={thrustPercent > 0 ? 5 : 1.5} color="#e86c3e" />
         <TrajectoryTrail positions={trail} />
-        <Rocket orientation={orientation} position={position} />
+        <Rocket orientation={orientation} position={position} thrustPercent={thrustPercent} />
         <FlightCamera position={position} />
         <gridHelper args={[5000, 100, "#1a4d57", "#10272d"]} position={[0, GROUND_Y, 0]} />
       </Canvas>
