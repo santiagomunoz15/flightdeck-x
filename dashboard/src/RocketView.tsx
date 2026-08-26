@@ -49,7 +49,10 @@ function FlightModel({ thrustPercent }: { thrustPercent: number }) {
     const center = bounds.getCenter(new Vector3());
 
     if (exhaust && exhaustParent) exhaustParent.add(exhaust);
-    if (exhaust) exhaust.visible = false;
+    if (exhaust) {
+      exhaust.visible = false;
+      exhaust.scale.setScalar(0);
+    }
 
     return {
       modelOffset: new Vector3(-center.x, -bounds.min.y, -center.z),
@@ -62,7 +65,10 @@ function FlightModel({ thrustPercent }: { thrustPercent: number }) {
     if (!plume || !plumeScale) return;
     const thrust = Math.min(Math.max(thrustPercent, 0), 100) / 100;
     plume.visible = thrust > 0.005;
-    if (!plume.visible) return;
+    if (!plume.visible) {
+      plume.scale.setScalar(0);
+      return;
+    }
     const flicker = 1 + Math.sin(clock.elapsedTime * 31) * 0.055 + Math.sin(clock.elapsedTime * 47) * 0.025;
     plume.scale.set(
       plumeScale.x * flicker,
@@ -109,12 +115,11 @@ function FlightCamera({ position }: { position: Position }) {
     const rocket = scenePosition(position);
     rocket.y += ROCKET_HEIGHT_M / 2;
 
-    // Frame the complete vertical journey from the pad to the vehicle. The
-    // camera distance therefore grows naturally as real altitude increases.
-    const verticalSpan = Math.max(ROCKET_HEIGHT_M * 1.6, rocket.y + ROCKET_HEIGHT_M / 2);
-    const halfFovRadians = CAMERA_FOV_DEGREES * Math.PI / 360;
-    const distance = verticalSpan / (2 * Math.tan(halfFovRadians)) * 1.35;
-    desiredTarget.set(rocket.x / 2, verticalSpan / 2, rocket.z / 2);
+    // Follow the vehicle instead of framing the entire ground-to-rocket span.
+    // Altitude adds only a modest pullback, which reverses naturally on descent.
+    const altitudeRatio = Math.min(Math.max(position[2], 0) / 2400, 1);
+    const distance = 135 + altitudeRatio * 110;
+    desiredTarget.copy(rocket);
     desiredPosition.set(
       desiredTarget.x + distance * 0.7,
       desiredTarget.y + distance * 0.22,
