@@ -106,8 +106,7 @@ function FlightModel({ thrustPercent }: { thrustPercent: number }) {
   );
 }
 
-function Rocket({ orientation, position, thrustPercent }: { orientation: [number, number, number, number]; position: Position; thrustPercent: number }) {
-  const group = useRef<Group>(null);
+function Rocket({ orientation, position, thrustPercent, vehicle }: { orientation: [number, number, number, number]; position: Position; thrustPercent: number; vehicle: { current: Group | null } }) {
   const targetPosition = useMemo(() => new Vector3(), []);
   const targetOrientation = useMemo(() => new Quaternion(), []);
   const protocolOrientation = useMemo(() => new Quaternion(), []);
@@ -116,20 +115,21 @@ function Rocket({ orientation, position, thrustPercent }: { orientation: [number
   const modelAxis = useMemo(() => new Vector3(0, 1, 0), []);
   useFrame((_, delta) => {
     const [w, x, y, z] = orientation;
-    if (group.current) {
+    if (vehicle.current) {
       protocolOrientation.set(x, y, z, w).normalize();
       bodyAxis.set(0, 0, 1).applyQuaternion(protocolOrientation);
       displayAxis.set(bodyAxis.x, bodyAxis.z, -bodyAxis.y).normalize();
       targetOrientation.setFromUnitVectors(modelAxis, displayAxis);
-      const smoothing = 1 - Math.exp(-delta * 12);
-      group.current.quaternion.slerp(targetOrientation, smoothing);
+      const stableDelta = Math.min(delta, 1 / 30);
+      const smoothing = 1 - Math.exp(-stableDelta * 8);
+      vehicle.current.quaternion.slerp(targetOrientation, smoothing);
       // Telemetry is East-North-Up; Three.js uses Y as its vertical display axis.
       targetPosition.copy(scenePosition(position));
-      group.current.position.lerp(targetPosition, smoothing);
+      vehicle.current.position.lerp(targetPosition, smoothing);
     }
   });
   return (
-    <group ref={group}>
+    <group ref={vehicle}>
       <Suspense fallback={<FallbackRocket />}>
         <FlightModel thrustPercent={thrustPercent} />
       </Suspense>
@@ -137,28 +137,30 @@ function Rocket({ orientation, position, thrustPercent }: { orientation: [number
   );
 }
 
-function FlightCamera({ position }: { position: Position }) {
+function FlightCamera({ vehicle }: { vehicle: { current: Group | null } }) {
   const { camera } = useThree();
   const desiredPosition = useMemo(() => new Vector3(), []);
   const desiredTarget = useMemo(() => new Vector3(), []);
   const currentTarget = useMemo(() => new Vector3(0, ROCKET_HEIGHT_M / 2, 0), []);
 
   useFrame((_, delta) => {
-    const rocket = scenePosition(position);
-    rocket.y += ROCKET_HEIGHT_M / 2;
+    if (!vehicle.current) return;
+    const rocket = vehicle.current.position;
 
     // Follow the vehicle instead of framing the entire ground-to-rocket span.
     // Altitude adds only a modest pullback, which reverses naturally on descent.
-    const altitudeRatio = Math.min(Math.max(position[2], 0) / 2400, 1);
+    const altitudeRatio = Math.min(Math.max(rocket.y, 0) / 2400, 1);
     const distance = 145 + altitudeRatio * 175;
     desiredTarget.copy(rocket);
+    desiredTarget.y += ROCKET_HEIGHT_M / 2;
     desiredPosition.set(
       desiredTarget.x + distance * 0.7,
       desiredTarget.y + distance * 0.22,
       desiredTarget.z + distance,
     );
 
-    const smoothing = 1 - Math.exp(-delta * 1.6);
+    const stableDelta = Math.min(delta, 1 / 30);
+    const smoothing = 1 - Math.exp(-stableDelta * 2.2);
     camera.position.lerp(desiredPosition, smoothing);
     currentTarget.lerp(desiredTarget, smoothing);
     camera.lookAt(currentTarget);
@@ -168,6 +170,7 @@ function FlightCamera({ position }: { position: Position }) {
 }
 
 export function RocketView({ orientation, position, trail, thrustPercent }: { orientation: [number, number, number, number]; position: Position; trail: Position[]; thrustPercent: number }) {
+  const vehicle = useRef<Group>(null);
   return (
     <div className="rocket-view" aria-label="Quaternion-driven rocket orientation">
       <Canvas camera={{ position: [90, 45, 130], fov: CAMERA_FOV_DEGREES, near: 0.1, far: 20000 }} dpr={[1, 1.5]}>
@@ -175,8 +178,8 @@ export function RocketView({ orientation, position, trail, thrustPercent }: { or
         <ambientLight intensity={1.2} /><directionalLight position={[4, 6, 5]} intensity={3.5} color="#e8f6ff" />
         <pointLight position={[-3, -2, 3]} intensity={thrustPercent > 0 ? 5 : 1.5} color="#e86c3e" />
         <TrajectoryTrail positions={trail} />
-        <Rocket orientation={orientation} position={position} thrustPercent={thrustPercent} />
-        <FlightCamera position={position} />
+        <Rocket orientation={orientation} position={position} thrustPercent={thrustPercent} vehicle={vehicle} />
+        <FlightCamera vehicle={vehicle} />
         <mesh position={[LANDING_TARGET_EAST_M, 0.6, 0]}>
           <cylinderGeometry args={[24, 24, 1.2, 32]} />
           <meshStandardMaterial color="#67d6c7" emissive="#1d665e" emissiveIntensity={1.4} />
