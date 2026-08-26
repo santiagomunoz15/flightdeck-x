@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef } from "react";
-import { Box3, BufferGeometry, Group, Line as ThreeLine, LineBasicMaterial, Mesh, Object3D, Vector3 } from "three";
+import { Box3, BufferGeometry, Group, Line as ThreeLine, LineBasicMaterial, Mesh, Object3D, Quaternion, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 type Position = [number, number, number];
@@ -107,12 +107,17 @@ function FlightModel({ thrustPercent }: { thrustPercent: number }) {
 
 function Rocket({ orientation, position, thrustPercent }: { orientation: [number, number, number, number]; position: Position; thrustPercent: number }) {
   const group = useRef<Group>(null);
-  useFrame(() => {
+  const targetPosition = useMemo(() => new Vector3(), []);
+  const targetOrientation = useMemo(() => new Quaternion(), []);
+  useFrame((_, delta) => {
     const [w, x, y, z] = orientation;
     if (group.current) {
-      group.current.quaternion.set(x, y, z, w).normalize();
+      targetOrientation.set(x, y, z, w).normalize();
+      const smoothing = 1 - Math.exp(-delta * 12);
+      group.current.quaternion.slerp(targetOrientation, smoothing);
       // Telemetry is East-North-Up; Three.js uses Y as its vertical display axis.
-      group.current.position.copy(scenePosition(position));
+      targetPosition.copy(scenePosition(position));
+      group.current.position.lerp(targetPosition, smoothing);
     }
   });
   return (
@@ -137,7 +142,7 @@ function FlightCamera({ position }: { position: Position }) {
     // Follow the vehicle instead of framing the entire ground-to-rocket span.
     // Altitude adds only a modest pullback, which reverses naturally on descent.
     const altitudeRatio = Math.min(Math.max(position[2], 0) / 2400, 1);
-    const distance = 135 + altitudeRatio * 110;
+    const distance = 145 + altitudeRatio * 175;
     desiredTarget.copy(rocket);
     desiredPosition.set(
       desiredTarget.x + distance * 0.7,
@@ -145,7 +150,7 @@ function FlightCamera({ position }: { position: Position }) {
       desiredTarget.z + distance,
     );
 
-    const smoothing = 1 - Math.exp(-delta * 2.5);
+    const smoothing = 1 - Math.exp(-delta * 1.6);
     camera.position.lerp(desiredPosition, smoothing);
     currentTarget.lerp(desiredTarget, smoothing);
     camera.lookAt(currentTarget);
