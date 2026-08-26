@@ -1,11 +1,12 @@
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef } from "react";
-import { Box3, BufferGeometry, Group, Line as ThreeLine, LineBasicMaterial, Vector3 } from "three";
+import { Box3, BufferGeometry, Group, Line as ThreeLine, LineBasicMaterial, Mesh, Object3D, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 type Position = [number, number, number];
 
 const ROCKET_HEIGHT_M = 50;
+const FULL_THRUST_PLUME_LENGTH_M = 70;
 const CAMERA_FOV_DEGREES = 35;
 const GROUND_Y = 0;
 
@@ -40,41 +41,59 @@ function FallbackRocket() {
 function FlightModel({ thrustPercent }: { thrustPercent: number }) {
   const { scene } = useLoader(GLTFLoader, "/models/Falcon9.glb");
   const model = useMemo(() => scene.clone(true), [scene]);
-  const { modelOffset, plume, plumeScale } = useMemo(() => {
-    const exhaust = model.getObjectByName("Exhaust Plume");
-    const exhaustParent = exhaust?.parent;
-    if (exhaust && exhaustParent) exhaustParent.remove(exhaust);
+  const { modelOffset, plumes } = useMemo(() => {
+    const exhausts: Object3D[] = [];
+    model.traverse((object) => {
+      const normalizedName = object.name.replace(/[\s_-]/g, "").toLowerCase();
+      const materials = object instanceof Mesh
+        ? (Array.isArray(object.material) ? object.material : [object.material])
+        : [];
+      if (normalizedName === "exhaustplume" || materials.some((material) => material.name.toLowerCase() === "plume")) {
+        exhausts.push(object);
+      }
+    });
+
+    const detached = exhausts.flatMap((exhaust) => exhaust.parent ? [{ exhaust, parent: exhaust.parent }] : []);
+    for (const { exhaust, parent } of detached) parent.remove(exhaust);
 
     const bounds = new Box3().setFromObject(model);
     const center = bounds.getCenter(new Vector3());
 
-    if (exhaust && exhaustParent) exhaustParent.add(exhaust);
-    if (exhaust) {
+    for (const { exhaust, parent } of detached) parent.add(exhaust);
+    model.updateMatrixWorld(true);
+    const plumeObjects = exhausts.map((exhaust) => ({
+      object: exhaust,
+      baseScale: exhaust.scale.clone(),
+      baseHeight: new Box3().setFromObject(exhaust).getSize(new Vector3()).y,
+    }));
+    for (const { object: exhaust } of plumeObjects) {
       exhaust.visible = false;
       exhaust.scale.setScalar(0);
     }
 
     return {
       modelOffset: new Vector3(-center.x, -bounds.min.y, -center.z),
-      plume: exhaust,
-      plumeScale: exhaust?.scale.clone(),
+      plumes: plumeObjects,
     };
   }, [model]);
 
   useFrame(({ clock }) => {
-    if (!plume || !plumeScale) return;
     const thrust = Math.min(Math.max(thrustPercent, 0), 100) / 100;
-    plume.visible = thrust > 0.005;
-    if (!plume.visible) {
-      plume.scale.setScalar(0);
-      return;
-    }
     const flicker = 1 + Math.sin(clock.elapsedTime * 31) * 0.055 + Math.sin(clock.elapsedTime * 47) * 0.025;
-    plume.scale.set(
-      plumeScale.x * flicker,
-      plumeScale.y * (0.3 + thrust * 0.7) * flicker,
-      plumeScale.z * flicker,
-    );
+    for (const { object: plume, baseScale, baseHeight } of plumes) {
+      plume.visible = thrust > 0.005;
+      if (!plume.visible) {
+        plume.scale.setScalar(0);
+        continue;
+      }
+      const targetLength = FULL_THRUST_PLUME_LENGTH_M * (0.1 + thrust * 0.9);
+      const lengthScale = baseHeight > 0 ? targetLength / baseHeight : 1;
+      plume.scale.set(
+        baseScale.x * (0.85 + thrust * 0.3) * flicker,
+        baseScale.y * lengthScale * flicker,
+        baseScale.z * (0.85 + thrust * 0.3) * flicker,
+      );
+    }
   });
 
   return (
