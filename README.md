@@ -1,5 +1,7 @@
 # FlightDeck X
 
+[![CI](https://github.com/santiagomunoz15/flightdeck-x/actions/workflows/ci.yml/badge.svg)](https://github.com/santiagomunoz15/flightdeck-x/actions/workflows/ci.yml)
+
 A real-time rocket telemetry and mission-control system built from first
 principles. FlightDeck X combines a deterministic C++ flight simulator, a
 versioned binary protocol, UDP telemetry transport, a TypeScript streaming
