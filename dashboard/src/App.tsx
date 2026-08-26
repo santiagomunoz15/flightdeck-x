@@ -23,10 +23,10 @@ const FAULTS = [
 ];
 
 function TelemetryChart({ samples, events }: { samples: TelemetrySample[]; events: MissionEvent[] }) {
-  const data = useMemo(() => chartSamples(samples).map((sample) => ({ time: sample.timestampUs / 1e6, altitude: sample.positionM[2], velocity: sample.velocityMps[2], pressure: dynamicPressureKpa(sample) })), [samples]);
+  const data = useMemo(() => chartSamples(samples).map((sample) => ({ time: sample.timestampUs / 1e6, altitude: sample.positionM[2], velocity: sample.velocityMps[2], truthAltitude: sample.truthPositionM[2], truthVelocity: sample.truthVelocityMps[2], pressure: dynamicPressureKpa(sample) })), [samples]);
   return (
     <div className="chart-wrap">
-      <div className="panel-heading"><div><span>FLIGHT PROFILE</span><h2>Trajectory telemetry</h2></div><div className="legend"><i className="altitude" />Altitude <i className="velocity" />Velocity</div></div>
+      <div className="panel-heading"><div><span>FLIGHT PROFILE</span><h2>Measured and truth telemetry</h2></div><div className="legend"><i className="altitude" />Measured <i className="truth" />Truth <i className="velocity" />Velocity</div></div>
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={data} margin={{ top: 12, right: 16, left: 8, bottom: 0 }}>
           <CartesianGrid stroke="#547078" strokeOpacity={0.14} strokeWidth={0.75} horizontal={false} vertical />
@@ -38,8 +38,8 @@ function TelemetryChart({ samples, events }: { samples: TelemetrySample[]; event
             contentStyle={{ background: "#0d171c", border: "1px solid #29434b", borderRadius: 2 }}
             labelFormatter={(value) => `T+ ${Number(value).toFixed(3)} s`}
             formatter={(value, name) => [
-              `${Number(value).toFixed(3)} ${name === "altitude" ? "m" : "m/s"}`,
-              name === "altitude" ? "Altitude" : "Velocity",
+              `${Number(value).toFixed(3)} ${String(name).toLowerCase().includes("altitude") ? "m" : "m/s"}`,
+              ({ altitude: "Measured altitude", velocity: "Measured velocity", truthAltitude: "Truth altitude", truthVelocity: "Truth velocity" } as Record<string, string>)[String(name)] ?? String(name),
             ]}
           />
           {events.filter((event) => event.category === "fault").map((event) => (
@@ -52,6 +52,8 @@ function TelemetryChart({ samples, events }: { samples: TelemetrySample[]; event
               label={{ value: "FAULT", position: "insideTop", fill: "#e8ae4a", fontSize: 8 }}
             />
           ))}
+          <Line yAxisId="alt" type="monotone" dataKey="truthAltitude" stroke="#a8bbc0" strokeDasharray="4 4" dot={false} strokeWidth={1.2} isAnimationActive={false} />
+          <Line yAxisId="vel" type="monotone" dataKey="truthVelocity" stroke="#a8bbc0" strokeDasharray="4 4" dot={false} strokeWidth={1.2} isAnimationActive={false} />
           <Line yAxisId="alt" type="monotone" dataKey="altitude" stroke="#67d6c7" dot={false} strokeWidth={2} isAnimationActive={false} />
           <Line yAxisId="vel" type="monotone" dataKey="velocity" stroke="#e96d42" dot={false} strokeWidth={1.6} isAnimationActive={false} />
         </LineChart>
@@ -93,6 +95,8 @@ export default function App() {
   const altitude = sample?.positionM[2];
   const speed = sample ? speedMps(sample) : undefined;
   const dynamicPressure = sample ? dynamicPressureKpa(sample) : undefined;
+  const altitudeResidual = sample ? sample.positionM[2] - sample.truthPositionM[2] : undefined;
+  const velocityResidual = sample ? sample.velocityMps[2] - sample.truthVelocityMps[2] : undefined;
   const packetAge = telemetry.lastPacketAt ? Math.max(0, Date.now() - telemetry.lastPacketAt) : undefined;
   const nominal = telemetry.status === "connected" && (sample?.faultFlags ?? 0) === 0;
   const healthText = telemetry.status !== "connected"
@@ -142,6 +146,8 @@ export default function App() {
             <div className="panel-heading"><div><span>PROPULSION</span><h2>Engine health</h2></div><i className={nominal ? "health-dot" : "health-dot warn"} /></div>
             <div className="system-row"><span>CHAMBER PRESSURE</span><strong>{format(sample?.chamberPressureMpa, 2)} <small>MPA</small></strong></div>
             <div className="system-row"><span>FAULT REGISTER</span><strong>{sample ? `0x${sample.faultFlags.toString(16).padStart(8, "0")}` : "—"}</strong></div>
+            <div className="system-row"><span>ALTITUDE RESIDUAL</span><strong>{format(altitudeResidual, 3)} <small>M</small></strong></div>
+            <div className="system-row"><span>VELOCITY RESIDUAL</span><strong>{format(velocityResidual, 3)} <small>M/S</small></strong></div>
           </section>
 
           <section className="fault-panel panel">
