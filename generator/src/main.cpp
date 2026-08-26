@@ -50,6 +50,8 @@ flightdeck::protocol::Telemetry make_telemetry(
       .thrust_percent = thrust_percent,
       .chamber_pressure_mpa = thrust_percent * 0.12F,
       .fault_flags = fault_flags,
+      .truth_position_m = {0.0, 0.0, state.altitude_m},
+      .truth_velocity_mps = {0.0, 0.0, state.velocity_mps},
   };
   if ((fault_flags & flightdeck::generator::kSensorNoise) != 0U) {
     telemetry.position_m[2] += std::sin(static_cast<double>(sequence) * 0.173) * 8.0;

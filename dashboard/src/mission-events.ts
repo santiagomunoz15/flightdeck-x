@@ -28,13 +28,17 @@ export function deriveMissionEvents(samples: TelemetrySample[]): MissionEvent[] 
   let previous: TelemetrySample | undefined;
   for (const sample of samples) {
     if (previous && sample.missionPhase !== previous.missionPhase) {
-      const label = PHASE_EVENTS[sample.missionPhase];
+      const touchdownSpeed = Math.abs(previous.truthVelocityMps[2]);
+      const label = sample.missionPhase === "LANDED"
+        ? touchdownSpeed <= 3 ? "SOFT TOUCHDOWN"
+          : touchdownSpeed <= 8 ? "HARD LANDING" : "VEHICLE IMPACT"
+        : PHASE_EVENTS[sample.missionPhase];
       if (label) events.push({
         id: `${sample.sequence}-phase-${sample.missionPhase}`,
         timestampUs: sample.timestampUs,
         sequence: sample.sequence,
         category: "phase",
-        severity: "info",
+        severity: label === "HARD LANDING" ? "warning" : label === "VEHICLE IMPACT" ? "critical" : "info",
         label,
       });
     }

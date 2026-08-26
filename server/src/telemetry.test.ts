@@ -19,11 +19,12 @@ describe("decodeTelemetry", () => {
       positionM: [10, -20, 1234.5], velocityMps: [1, 2, -3],
       orientationWxyz: [1, 0, 0, 0], thrustPercent: 75.5,
       chamberPressureMpa: 9.25, faultFlags: 5, serverReceivedAtMs: 1000,
+      truthPositionM: [10.25, -20.25, 1234.75], truthVelocityMps: [1.25, 2.25, -3.25],
     });
   });
 
   it("rejects bad sizes and corruption", () => {
-    expect(decodeTelemetry(new Uint8Array(98))).toEqual({ ok: false, error: "wrong_size" });
+    expect(decodeTelemetry(new Uint8Array(146))).toEqual({ ok: false, error: "wrong_size" });
     const corrupt = telemetryFixture();
     corrupt[20] = (corrupt[20] ?? 0) ^ 1;
     expect(decodeTelemetry(corrupt)).toEqual({ ok: false, error: "checksum_mismatch" });

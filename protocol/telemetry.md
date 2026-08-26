@@ -2,7 +2,7 @@
 
 Protocol version: **1**
 
-Each UDP datagram contains exactly one 99-byte telemetry packet. Multi-byte
+Each UDP datagram contains exactly one 147-byte telemetry packet. Multi-byte
 values use network byte order (big-endian). Floating-point values use their
 IEEE 754 binary representation, with those bits written in big-endian order.
 
@@ -21,7 +21,9 @@ IEEE 754 binary representation, with those bits written in big-endian order.
 | 83 | 4 | `thrust_percent` | `float32` | % | Commanded thrust in the inclusive range 0–100 |
 | 87 | 4 | `chamber_pressure_mpa` | `float32` | MPa | Measured engine chamber pressure |
 | 91 | 4 | `fault_flags` | `uint32` | — | Active faults; zero means nominal |
-| 95 | 4 | `crc32` | `uint32` | — | IEEE CRC-32 of bytes 0–94 |
+| 95 | 24 | `truth_position_m` | 3 × `float64` | m | Noise-free world-frame simulation position |
+| 119 | 24 | `truth_velocity_mps` | 3 × `float64` | m/s | Noise-free world-frame simulation velocity |
+| 143 | 4 | `crc32` | `uint32` | — | IEEE CRC-32 of bytes 0–142 |
 
 ### Mission phases
 
@@ -47,7 +49,7 @@ may reject packets whose quaternion norm differs materially from 1.
 ## CRC and validation
 
 `crc32` uses the IEEE CRC-32 polynomial `0xEDB88320`, initial value
-`0xFFFFFFFF`, and final XOR `0xFFFFFFFF`. It covers the first 95 bytes of the
+`0xFFFFFFFF`, and final XOR `0xFFFFFFFF`. It covers the first 143 bytes of the
 packet and does not cover the CRC field itself.
 
 A receiver validates packet size, magic, supported version, CRC, and field

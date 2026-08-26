@@ -4,6 +4,7 @@ export interface TelemetrySample {
   positionM: [number, number, number]; velocityMps: [number, number, number];
   orientationWxyz: [number, number, number, number]; thrustPercent: number;
   chamberPressureMpa: number; faultFlags: number; serverReceivedAtMs: number;
+  truthPositionM: [number, number, number]; truthVelocityMps: [number, number, number];
 }
 export interface StreamMetrics { received: number; valid: number; rejected: number; lost: number; reordered: number; }
 export type FaultType = "thruster_loss" | "sensor_noise" | "packet_loss";

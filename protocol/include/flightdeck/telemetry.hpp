@@ -9,8 +9,8 @@ namespace flightdeck::protocol {
 
 inline constexpr std::uint32_t kTelemetryMagic = 0x46445831U;
 inline constexpr std::uint16_t kTelemetryVersion = 1U;
-inline constexpr std::size_t kTelemetryPacketSize = 99U;
-inline constexpr std::size_t kCrcOffset = 95U;
+inline constexpr std::size_t kTelemetryPacketSize = 147U;
+inline constexpr std::size_t kCrcOffset = 143U;
 
 enum class MissionPhase : std::uint8_t {
   prelaunch = 0,
@@ -40,6 +40,8 @@ struct PackedTelemetryPacket {
   std::array<std::byte, 4> thrust_percent;
   std::array<std::byte, 4> chamber_pressure_mpa;
   std::array<std::byte, 4> fault_flags;
+  std::array<std::byte, 24> truth_position_m;
+  std::array<std::byte, 24> truth_velocity_mps;
   std::array<std::byte, 4> crc32;
 };
 #pragma pack(pop)
@@ -56,6 +58,8 @@ struct Telemetry {
   float thrust_percent{};
   float chamber_pressure_mpa{};
   std::uint32_t fault_flags{};
+  std::array<double, 3> truth_position_m{};
+  std::array<double, 3> truth_velocity_mps{};
 
   bool operator==(const Telemetry&) const = default;
 };

@@ -15,6 +15,8 @@ export function telemetryFixture(sequence = 42, timestampUs = 1_500_000n): Uint8
   view.setFloat32(83, 75.5, false);
   view.setFloat32(87, 9.25, false);
   view.setUint32(91, 5, false);
+  [10.25, -20.25, 1234.75].forEach((value, index) => view.setFloat64(95 + index * 8, value, false));
+  [1.25, 2.25, -3.25].forEach((value, index) => view.setFloat64(119 + index * 8, value, false));
   view.setUint32(CRC_OFFSET, crc32(packet.subarray(0, CRC_OFFSET)), false);
   return packet;
 }

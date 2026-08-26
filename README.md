@@ -33,7 +33,7 @@ high-fidelity aerospace simulation.
 ## Current capabilities
 
 - Deterministic 100 Hz launch, coast, descent, landing-burn, and touchdown simulation
-- Versioned 99-byte binary telemetry with CRC32 and sequence tracking
+- Versioned 147-byte binary telemetry with CRC32 and sequence tracking
 - Non-blocking SPSC queue and UDP transmission from the simulation thread
 - TypeScript validation, 60-second history, and multi-client WebSocket streaming
 - Responsive React dashboard with charts, health metrics, and automatic reconnect
@@ -161,6 +161,8 @@ simulator or server:
 | thrust | `float32` | % | Commanded thrust level |
 | chamber_pressure | `float32` | MPa | Engine health value |
 | fault_flags | `uint32` | bit field | Active simulated faults |
+| truth position | 3 × `float64` | m | Noise-free simulation position |
+| truth velocity | 3 × `float64` | m/s | Noise-free simulation velocity |
 | crc32 | `uint32` | — | Detects packet corruption |
 
 The contract records byte order, exact packet size, quaternion ordering,

@@ -11,6 +11,8 @@ export interface TelemetrySample {
   thrustPercent: number;
   chamberPressureMpa: number;
   faultFlags: number;
+  truthPositionM: [number, number, number];
+  truthVelocityMps: [number, number, number];
   serverReceivedAtMs: number;
 }
 

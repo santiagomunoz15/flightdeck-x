@@ -29,6 +29,8 @@ Telemetry fixture() {
       .thrust_percent = 75.5F,
       .chamber_pressure_mpa = 9.25F,
       .fault_flags = 0x00000005U,
+      .truth_position_m = {1.25, -2.25, 3.75},
+      .truth_velocity_mps = {4.25, 5.25, -6.25},
   };
 }
 

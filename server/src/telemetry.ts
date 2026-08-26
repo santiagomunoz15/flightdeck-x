@@ -3,8 +3,8 @@ import { missionPhases, type TelemetrySample } from "./types.js";
 
 export const TELEMETRY_MAGIC = 0x46445831;
 export const TELEMETRY_VERSION = 1;
-export const TELEMETRY_PACKET_SIZE = 99;
-export const CRC_OFFSET = 95;
+export const TELEMETRY_PACKET_SIZE = 147;
+export const CRC_OFFSET = 143;
 
 export type DecodeError = "wrong_size" | "wrong_magic" | "unsupported_version" | "checksum_mismatch" | "invalid_phase" | "invalid_number";
 export type DecodeResult = { ok: true; sample: TelemetrySample } | { ok: false; error: DecodeError };
@@ -25,7 +25,9 @@ export function decodeTelemetry(packet: Uint8Array, receivedAtMs = Date.now()): 
     orientationWxyz: [view.getFloat32(67, false), view.getFloat32(71, false), view.getFloat32(75, false), view.getFloat32(79, false)],
     thrustPercent: view.getFloat32(83, false), chamberPressureMpa: view.getFloat32(87, false),
     faultFlags: view.getUint32(91, false), serverReceivedAtMs: receivedAtMs,
+    truthPositionM: [view.getFloat64(95, false), view.getFloat64(103, false), view.getFloat64(111, false)],
+    truthVelocityMps: [view.getFloat64(119, false), view.getFloat64(127, false), view.getFloat64(135, false)],
   };
-  const numbers = [...sample.positionM, ...sample.velocityMps, ...sample.orientationWxyz, sample.thrustPercent, sample.chamberPressureMpa];
+  const numbers = [...sample.positionM, ...sample.velocityMps, ...sample.orientationWxyz, ...sample.truthPositionM, ...sample.truthVelocityMps, sample.thrustPercent, sample.chamberPressureMpa];
   return numbers.every(Number.isFinite) ? { ok: true, sample } : { ok: false, error: "invalid_number" };
 }
