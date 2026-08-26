@@ -10,6 +10,8 @@ const server = new TelemetryServer({
   udpHost: process.env.UDP_HOST ?? "127.0.0.1", udpPort: integerEnvironment("UDP_PORT", 5000),
   wsHost: process.env.WS_HOST ?? "127.0.0.1", wsPort: integerEnvironment("WS_PORT", 8080),
   historyCapacity: integerEnvironment("HISTORY_CAPACITY", 6000),
+  controlHost: process.env.CONTROL_HOST ?? "127.0.0.1",
+  controlPort: integerEnvironment("CONTROL_PORT", 5001),
 });
 await server.start();
 console.log(`UDP telemetry: ${server.options.udpHost}:${server.options.udpPort}`);

@@ -15,6 +15,12 @@ function Metric({ label, value, unit, accent }: { label: string; value: string; 
   return <div className={`metric ${accent ? "metric-accent" : ""}`}><span>{label}</span><strong>{value}</strong><small>{unit}</small></div>;
 }
 
+const FAULTS = [
+  { type: "thruster_loss" as const, mask: 1, label: "THRUSTER LOSS", detail: "LIMIT OUTPUT TO 60%" },
+  { type: "sensor_noise" as const, mask: 2, label: "SENSOR NOISE", detail: "SEEDED ALT / VEL NOISE" },
+  { type: "packet_loss" as const, mask: 4, label: "PACKET LOSS", detail: "DROP EVERY 10TH SAMPLE" },
+];
+
 function TelemetryChart({ samples }: { samples: TelemetrySample[] }) {
   const data = useMemo(() => chartSamples(samples).map((sample) => ({ time: sample.timestampUs / 1e6, altitude: sample.positionM[2], velocity: sample.velocityMps[2], pressure: dynamicPressureKpa(sample) })), [samples]);
   return (
@@ -58,6 +64,9 @@ export default function App() {
   const dynamicPressure = sample ? dynamicPressureKpa(sample) : undefined;
   const packetAge = telemetry.lastPacketAt ? Math.max(0, Date.now() - telemetry.lastPacketAt) : undefined;
   const nominal = telemetry.status === "connected" && (sample?.faultFlags ?? 0) === 0;
+  const healthText = telemetry.status !== "connected"
+    ? "CHECK TELEMETRY LINK"
+    : (sample?.faultFlags ?? 0) !== 0 ? "FAULT CONDITION ACTIVE" : "ALL SYSTEMS NOMINAL";
 
   return (
     <main>
@@ -70,7 +79,7 @@ export default function App() {
       <section className="mission-strip">
         <div><span>MISSION</span><strong>FDX-01 / VERTICAL FLIGHT</strong></div>
         <div><span>FLIGHT PHASE</span><strong className="phase">{sample?.missionPhase ?? "STANDBY"}</strong></div>
-        <div><span>VEHICLE HEALTH</span><strong className={nominal ? "good" : "warn"}>{nominal ? "ALL SYSTEMS NOMINAL" : "CHECK TELEMETRY LINK"}</strong></div>
+        <div><span>VEHICLE HEALTH</span><strong className={nominal ? "good" : "warn"}>{healthText}</strong></div>
         <div><span>PACKET SEQUENCE</span><strong>{sample ? String(sample.sequence).padStart(6, "0") : "———"}</strong></div>
       </section>
 
@@ -96,6 +105,24 @@ export default function App() {
             <div className="panel-heading"><div><span>PROPULSION</span><h2>Engine health</h2></div><i className={nominal ? "health-dot" : "health-dot warn"} /></div>
             <div className="system-row"><span>CHAMBER PRESSURE</span><strong>{format(sample?.chamberPressureMpa, 2)} <small>MPA</small></strong></div>
             <div className="system-row"><span>FAULT REGISTER</span><strong>{sample ? `0x${sample.faultFlags.toString(16).padStart(8, "0")}` : "—"}</strong></div>
+          </section>
+
+          <section className="fault-panel panel">
+            <div className="panel-heading"><div><span>TEST CONTROL</span><h2>Fault injection</h2></div><b className={telemetry.controlConnected ? "control-online" : "control-offline"}>{telemetry.controlConnected ? "SIM LINK READY" : "SIM OFFLINE"}</b></div>
+            <div className="fault-list">
+              {FAULTS.map((fault) => {
+                const active = ((sample?.faultFlags ?? 0) & fault.mask) !== 0;
+                const pending = telemetry.commandState?.status === "pending" && telemetry.commandState.fault === fault.type;
+                return (
+                  <button key={fault.type} className={`fault-control ${active ? "active" : ""}`} disabled={!telemetry.controlConnected || pending} onClick={() => telemetry.sendFaultCommand(fault.type, !active)}>
+                    <i /><span><strong>{fault.label}</strong><small>{fault.detail}</small></span><b>{pending ? "SENDING" : active ? "ACTIVE" : "ARM"}</b>
+                  </button>
+                );
+              })}
+            </div>
+            <div className={`command-state ${telemetry.commandState?.status ?? "idle"}`}>
+              {telemetry.commandState ? `${telemetry.commandState.status.toUpperCase()} / ${telemetry.commandState.fault.replace("_", " ").toUpperCase()}${telemetry.commandState.message ? ` / ${telemetry.commandState.message}` : ""}` : "AWAITING OPERATOR COMMAND"}
+            </div>
           </section>
         </div>
       </section>

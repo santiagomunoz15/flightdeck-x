@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { startsNewFlight } from "./telemetry-utils";
-import type { ConnectionStatus, ServerMessage, StreamMetrics, TelemetrySample } from "./types";
+import type { CommandState, ConnectionStatus, FaultType, ServerMessage, StreamMetrics, TelemetrySample } from "./types";
 
 const EMPTY_METRICS: StreamMetrics = { received: 0, valid: 0, rejected: 0, lost: 0, reordered: 0 };
 const MAX_CLIENT_SAMPLES = 6000;
@@ -11,7 +11,10 @@ export function useTelemetry(url: string) {
   const [metrics, setMetrics] = useState<StreamMetrics>(EMPTY_METRICS);
   const [transportLatencyMs, setTransportLatencyMs] = useState(0);
   const [lastPacketAt, setLastPacketAt] = useState<number>();
+  const [controlConnected, setControlConnected] = useState(false);
+  const [commandState, setCommandState] = useState<CommandState>();
   const reconnectAttempt = useRef(0);
+  const socketRef = useRef<WebSocket | undefined>(undefined);
 
   useEffect(() => {
     let disposed = false;
@@ -47,10 +50,29 @@ export function useTelemetry(url: string) {
       if (disposed) return;
       setStatus("connecting");
       socket = new WebSocket(url);
+      socketRef.current = socket;
       socket.addEventListener("open", () => { reconnectAttempt.current = 0; setStatus("connected"); });
       socket.addEventListener("message", (event) => {
         try {
           const message = JSON.parse(String(event.data)) as ServerMessage;
+          if (message.type === "control_status") {
+            setControlConnected(message.connected);
+            return;
+          }
+          if (message.type === "command_ack") {
+            setCommandState({ id: message.id, fault: message.fault, enabled: message.enabled, status: "acknowledged" });
+            return;
+          }
+          if (message.type === "command_error") {
+            setCommandState((current) => ({
+              id: message.id ?? current?.id ?? "unknown",
+              fault: current?.fault ?? "thruster_loss",
+              enabled: current?.enabled ?? false,
+              status: "failed",
+              message: message.message,
+            }));
+            return;
+          }
           if (message.type === "history") {
             pending = message.samples.slice(-MAX_CLIENT_SAMPLES);
             latestSample = pending.at(-1);
@@ -74,6 +96,7 @@ export function useTelemetry(url: string) {
       socket.addEventListener("close", () => {
         if (disposed) return;
         setStatus("disconnected");
+        setControlConnected(false);
         const delay = Math.min(500 * 2 ** reconnectAttempt.current, 5000);
         reconnectAttempt.current += 1;
         reconnectTimer = window.setTimeout(connect, delay);
@@ -84,10 +107,20 @@ export function useTelemetry(url: string) {
     return () => {
       disposed = true;
       socket?.close();
+      socketRef.current = undefined;
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       if (frame !== undefined) cancelAnimationFrame(frame);
     };
   }, [url]);
 
-  return { status, samples, latest: samples.at(-1), metrics, transportLatencyMs, lastPacketAt };
+  const sendFaultCommand = (fault: FaultType, enabled: boolean) => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN || !controlConnected) return false;
+    const id = crypto.randomUUID();
+    socket.send(JSON.stringify({ type: "command", id, fault, enabled, issuedAtMs: Date.now() }));
+    setCommandState({ id, fault, enabled, status: "pending" });
+    return true;
+  };
+
+  return { status, samples, latest: samples.at(-1), metrics, transportLatencyMs, lastPacketAt, controlConnected, commandState, sendFaultCommand };
 }

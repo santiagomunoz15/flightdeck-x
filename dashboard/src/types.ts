@@ -6,8 +6,13 @@ export interface TelemetrySample {
   chamberPressureMpa: number; faultFlags: number; serverReceivedAtMs: number;
 }
 export interface StreamMetrics { received: number; valid: number; rejected: number; lost: number; reordered: number; }
+export type FaultType = "thruster_loss" | "sensor_noise" | "packet_loss";
+export interface CommandState { id: string; fault: FaultType; enabled: boolean; status: "pending" | "acknowledged" | "failed"; message?: string; }
 export type ServerMessage =
   | { type: "history"; samples: TelemetrySample[]; metrics: StreamMetrics }
   | { type: "reset"; metrics: StreamMetrics }
-  | { type: "telemetry"; sample: TelemetrySample; metrics: StreamMetrics };
+  | { type: "telemetry"; sample: TelemetrySample; metrics: StreamMetrics }
+  | { type: "control_status"; connected: boolean }
+  | { type: "command_ack"; id: string; fault: FaultType; enabled: boolean; acknowledgedAtMs: number }
+  | { type: "command_error"; id?: string; message: string };
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";

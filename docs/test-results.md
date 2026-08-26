@@ -74,3 +74,18 @@ drops or send errors.
 The dashboard production build and telemetry-helper tests passed. Its client
 history is bounded at 6,000 samples, chart data is decimated for rendering, and
 incoming 100 Hz messages are batched to animation frames.
+
+## Milestone 6: fault injection
+
+The control path was exercised end to end through WebSocket, the TypeScript
+server, TCP, and the C++ simulator. A `thruster_loss` command received a matching
+simulator acknowledgement, set telemetry fault mask `0x1`, and capped powered
+telemetry near 60% thrust. The flight trajectory visibly diverged and the
+landing burn was prolonged by reduced available thrust.
+
+Simulation tests independently confirm that thruster loss reduces commanded
+thrust by exactly 40% and produces lower altitude than the nominal trajectory.
+Sensor noise is deterministic and is applied only while creating telemetry, so
+the underlying physics state remains unchanged. Packet loss preserves sequence
+increments while omitting every tenth transmission, allowing downstream loss
+metrics to observe the fault.

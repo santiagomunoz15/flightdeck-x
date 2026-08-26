@@ -34,3 +34,11 @@ of delaying the physics loop.
 For a short validation run, `--max-steps 500` stops after five seconds.
 `--corrupt-once` damages packet 250 after its CRC is calculated so the receiver
 should report one rejected and one lost packet.
+
+## Fault control
+
+The simulator listens for reliable fault commands on TCP port 5001. The
+streaming server connects automatically, and the dashboard exposes controls for
+thruster loss, deterministic sensor noise, and deliberate packet loss. Each
+command is acknowledged before the interface reports success. See
+[`protocol/control.md`](../protocol/control.md) for the command contract.

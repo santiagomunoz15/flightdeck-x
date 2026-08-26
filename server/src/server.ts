@@ -1,11 +1,12 @@
 import { createSocket, type Socket as UdpSocket } from "node:dgram";
 import { WebSocket, WebSocketServer } from "ws";
 import { CircularBuffer } from "./circular-buffer.js";
+import { isFault, SimulatorControlClient } from "./control-client.js";
 import { SequenceTracker } from "./sequence-tracker.js";
 import { decodeTelemetry } from "./telemetry.js";
-import type { ServerMessage, StreamMetrics, TelemetrySample } from "./types.js";
+import type { FaultCommand, ServerMessage, StreamMetrics, TelemetrySample } from "./types.js";
 
-export interface ServerOptions { udpHost: string; udpPort: number; wsHost: string; wsPort: number; historyCapacity: number; }
+export interface ServerOptions { udpHost: string; udpPort: number; wsHost: string; wsPort: number; historyCapacity: number; controlHost: string; controlPort: number; }
 
 export class TelemetryServer {
   readonly #history: CircularBuffer<TelemetrySample>;
@@ -14,17 +15,29 @@ export class TelemetryServer {
   #latestTimestampUs: number | undefined;
   #udp: UdpSocket | undefined;
   #websocket: WebSocketServer | undefined;
-  constructor(readonly options: ServerOptions) { this.#history = new CircularBuffer(options.historyCapacity); }
+  readonly #control: SimulatorControlClient;
+  constructor(readonly options: ServerOptions) {
+    this.#history = new CircularBuffer(options.historyCapacity);
+    this.#control = new SimulatorControlClient(options.controlHost, options.controlPort, {
+      onStatus: (connected) => this.#broadcast({ type: "control_status", connected }),
+      onAcknowledgement: (id, fault, enabled) => this.#broadcast({ type: "command_ack", id, fault, enabled, acknowledgedAtMs: Date.now() }),
+    });
+  }
 
   async start(): Promise<void> {
     this.#websocket = new WebSocketServer({ host: this.options.wsHost, port: this.options.wsPort });
-    this.#websocket.on("connection", (client) => this.#send(client, { type: "history", samples: this.#history.toArray(), metrics: this.metrics }));
+    this.#websocket.on("connection", (client) => {
+      this.#send(client, { type: "history", samples: this.#history.toArray(), metrics: this.metrics });
+      this.#send(client, { type: "control_status", connected: this.#control.connected });
+      client.on("message", (data) => this.#acceptClientMessage(client, data.toString()));
+    });
     this.#udp = createSocket("udp4");
     this.#udp.on("message", (packet) => this.acceptPacket(packet));
     await new Promise<void>((resolve, reject) => {
       this.#udp?.once("error", reject);
       this.#udp?.bind(this.options.udpPort, this.options.udpHost, resolve);
     });
+    this.#control.start();
   }
 
   acceptPacket(packet: Uint8Array): void {
@@ -58,6 +71,7 @@ export class TelemetryServer {
   get metrics(): StreamMetrics { return { ...this.#metrics }; }
   get history(): TelemetrySample[] { return this.#history.toArray(); }
   async stop(): Promise<void> {
+    this.#control.stop();
     for (const client of this.#websocket?.clients ?? []) client.terminate();
     await Promise.all([
       new Promise<void>((resolve) => this.#udp?.close(() => resolve()) ?? resolve()),
@@ -67,8 +81,29 @@ export class TelemetryServer {
     this.#websocket = undefined;
   }
   #send(client: WebSocket, message: ServerMessage): void { if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(message)); }
+  #acceptClientMessage(client: WebSocket, encoded: string): void {
+    let value: unknown;
+    try { value = JSON.parse(encoded); } catch { this.#send(client, { type: "command_error", message: "Malformed JSON" }); return; }
+    if (!isFaultCommand(value)) {
+      this.#send(client, { type: "command_error", message: "Invalid command" });
+      return;
+    }
+    if (!this.#control.connected) {
+      this.#send(client, { type: "command_error", id: value.id, message: "Simulator control link unavailable" });
+      return;
+    }
+    this.#control.send(value);
+  }
   #broadcast(message: ServerMessage): void {
     const encoded = JSON.stringify(message);
     for (const client of this.#websocket?.clients ?? []) if (client.readyState === WebSocket.OPEN) client.send(encoded);
   }
+}
+
+function isFaultCommand(value: unknown): value is FaultCommand {
+  if (typeof value !== "object" || value === null) return false;
+  const command = value as Partial<FaultCommand>;
+  return command.type === "command" && typeof command.id === "string" &&
+    /^[A-Za-z0-9-]{1,64}$/.test(command.id) && isFault(command.fault) &&
+    typeof command.enabled === "boolean" && typeof command.issuedAtMs === "number";
 }

@@ -4,7 +4,7 @@ import { telemetryFixture } from "./test-fixture.js";
 
 describe("TelemetryServer", () => {
   it("validates, tracks sequence gaps, and bounds history", () => {
-    const server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: 5000, wsHost: "127.0.0.1", wsPort: 8080, historyCapacity: 2 });
+    const server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: 5000, wsHost: "127.0.0.1", wsPort: 8080, historyCapacity: 2, controlHost: "127.0.0.1", controlPort: 5001 });
     server.acceptPacket(telemetryFixture(10));
     server.acceptPacket(telemetryFixture(12));
     server.acceptPacket(telemetryFixture(13));
@@ -17,7 +17,7 @@ describe("TelemetryServer", () => {
   });
 
   it("clears history and metrics when a new simulator run starts", () => {
-    const server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: 5000, wsHost: "127.0.0.1", wsPort: 8080, historyCapacity: 10 });
+    const server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: 5000, wsHost: "127.0.0.1", wsPort: 8080, historyCapacity: 10, controlHost: "127.0.0.1", controlPort: 5001 });
     server.acceptPacket(telemetryFixture(100));
     server.acceptPacket(telemetryFixture(102));
     server.acceptPacket(telemetryFixture(0));
@@ -27,7 +27,7 @@ describe("TelemetryServer", () => {
   });
 
   it("detects a new run from a reset simulation clock when sequence zero is missed", () => {
-    const server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: 5000, wsHost: "127.0.0.1", wsPort: 8080, historyCapacity: 10 });
+    const server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: 5000, wsHost: "127.0.0.1", wsPort: 8080, historyCapacity: 10, controlHost: "127.0.0.1", controlPort: 5001 });
     server.acceptPacket(telemetryFixture(500, 10_000_000n));
     server.acceptPacket(telemetryFixture(7, 70_000n));
 

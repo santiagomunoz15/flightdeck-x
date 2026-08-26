@@ -40,7 +40,7 @@ afterEach(async () => {
 
 describe("UDP to WebSocket integration", () => {
   it("backfills a second client and streams live packets to both", async () => {
-    server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: UDP_PORT, wsHost: "127.0.0.1", wsPort: WS_PORT, historyCapacity: 10 });
+    server = new TelemetryServer({ udpHost: "127.0.0.1", udpPort: UDP_PORT, wsHost: "127.0.0.1", wsPort: WS_PORT, historyCapacity: 10, controlHost: "127.0.0.1", controlPort: 18_501 });
     await server.start();
 
     const firstClient = await connectClient();
