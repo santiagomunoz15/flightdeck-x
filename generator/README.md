@@ -1,8 +1,10 @@
 # Telemetry Generator
 
-The generator contains a deterministic, fixed-step vertical rocket simulation.
-Its intentionally simple physics make mission-state and telemetry behavior easy
-to inspect before more realism is added.
+The generator contains a deterministic, fixed-step two-dimensional rocket hop.
+The vehicle targets a 2.4 km apogee and a landing pad 1 km east of launch using
+an ascent pitch program and closed-loop horizontal braking during landing.
+Its intentionally simple physics keep mission-state, guidance, and telemetry
+behavior easy to inspect before more realism is added.
 
 ## Run
 

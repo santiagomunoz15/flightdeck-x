@@ -9,6 +9,7 @@ const ROCKET_HEIGHT_M = 50;
 const FULL_THRUST_PLUME_LENGTH_M = 70;
 const CAMERA_FOV_DEGREES = 35;
 const GROUND_Y = 0;
+const LANDING_TARGET_EAST_M = 1000;
 
 function scenePosition(position: Position): Vector3 {
   return new Vector3(position[0], Math.max(position[2], GROUND_Y), -position[1]);
@@ -109,10 +110,17 @@ function Rocket({ orientation, position, thrustPercent }: { orientation: [number
   const group = useRef<Group>(null);
   const targetPosition = useMemo(() => new Vector3(), []);
   const targetOrientation = useMemo(() => new Quaternion(), []);
+  const protocolOrientation = useMemo(() => new Quaternion(), []);
+  const bodyAxis = useMemo(() => new Vector3(), []);
+  const displayAxis = useMemo(() => new Vector3(), []);
+  const modelAxis = useMemo(() => new Vector3(0, 1, 0), []);
   useFrame((_, delta) => {
     const [w, x, y, z] = orientation;
     if (group.current) {
-      targetOrientation.set(x, y, z, w).normalize();
+      protocolOrientation.set(x, y, z, w).normalize();
+      bodyAxis.set(0, 0, 1).applyQuaternion(protocolOrientation);
+      displayAxis.set(bodyAxis.x, bodyAxis.z, -bodyAxis.y).normalize();
+      targetOrientation.setFromUnitVectors(modelAxis, displayAxis);
       const smoothing = 1 - Math.exp(-delta * 12);
       group.current.quaternion.slerp(targetOrientation, smoothing);
       // Telemetry is East-North-Up; Three.js uses Y as its vertical display axis.
@@ -169,6 +177,10 @@ export function RocketView({ orientation, position, trail, thrustPercent }: { or
         <TrajectoryTrail positions={trail} />
         <Rocket orientation={orientation} position={position} thrustPercent={thrustPercent} />
         <FlightCamera position={position} />
+        <mesh position={[LANDING_TARGET_EAST_M, 0.6, 0]}>
+          <cylinderGeometry args={[24, 24, 1.2, 32]} />
+          <meshStandardMaterial color="#67d6c7" emissive="#1d665e" emissiveIntensity={1.4} />
+        </mesh>
         <gridHelper args={[5000, 100, "#1a4d57", "#10272d"]} position={[0, GROUND_Y, 0]} />
       </Canvas>
       <span className="view-label">ATTITUDE / BODY FRAME</span>

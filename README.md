@@ -182,12 +182,12 @@ and decoded fields match the contract.
 ### Milestone 2: Build the C++ simulation loop
 
 The simulator uses a fixed-step loop at 100 Hz (`dt = 0.01 s`) and a simple
-vertical flight model rather than a physically complete rocket:
+two-dimensional East-Up flight model rather than a physically complete rocket:
 
 ```text
-acceleration = thrust / mass - gravity
+acceleration = thrust_vector / mass + gravity_vector
 velocity    += acceleration * dt
-altitude    += velocity * dt
+position    += velocity * dt
 ```
 
 Mission phases are represented as a state machine:
@@ -198,6 +198,11 @@ PRELAUNCH -> POWERED_ASCENT -> COAST -> DESCENT -> LANDING_BURN -> LANDED
 
 Orientation is represented by a quaternion that is normalized after every
 integration step.
+
+The powered-ascent pitch program builds eastward velocity while a predicted
+ballistic-apogee cutoff targets 2.4 km. During the landing burn, a damped
+closed-loop controller removes horizontal velocity and guides the vehicle to a
+pad 1 km downrange.
 
 **Checkpoint:** One-second status samples show plausible altitude, velocity,
 mass, and mission-phase changes across several stable, deterministic flights.

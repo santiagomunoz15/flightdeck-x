@@ -97,6 +97,7 @@ export default function App() {
   const dynamicPressure = sample ? dynamicPressureKpa(sample) : undefined;
   const altitudeResidual = sample ? sample.positionM[2] - sample.truthPositionM[2] : undefined;
   const velocityResidual = sample ? sample.velocityMps[2] - sample.truthVelocityMps[2] : undefined;
+  const landingError = sample ? 1000 - sample.positionM[0] : undefined;
   const packetAge = telemetry.lastPacketAt ? Math.max(0, Date.now() - telemetry.lastPacketAt) : undefined;
   const nominal = telemetry.status === "connected" && (sample?.faultFlags ?? 0) === 0;
   const healthText = telemetry.status !== "connected"
@@ -117,7 +118,7 @@ export default function App() {
       </header>
 
       <section className="mission-strip">
-        <div><span>MISSION</span><strong>FDX-01 / VERTICAL FLIGHT</strong></div>
+        <div><span>MISSION</span><strong>FDX-02 / 1 KM HOP</strong></div>
         <div><span>FLIGHT PHASE</span><strong className="phase">{sample?.missionPhase ?? "STANDBY"}</strong></div>
         <div><span>VEHICLE HEALTH</span><strong className={nominal ? "good" : "warn"}>{healthText}</strong></div>
         <div><span>PACKET SEQUENCE</span><strong>{sample ? String(sample.sequence).padStart(6, "0") : "———"}</strong></div>
@@ -148,6 +149,8 @@ export default function App() {
             <div className="system-row"><span>FAULT REGISTER</span><strong>{sample ? `0x${sample.faultFlags.toString(16).padStart(8, "0")}` : "—"}</strong></div>
             <div className="system-row"><span>ALTITUDE RESIDUAL</span><strong>{format(altitudeResidual, 3)} <small>M</small></strong></div>
             <div className="system-row"><span>VELOCITY RESIDUAL</span><strong>{format(velocityResidual, 3)} <small>M/S</small></strong></div>
+            <div className="system-row"><span>DOWNRANGE</span><strong>{format(sample?.positionM[0], 1)} <small>M</small></strong></div>
+            <div className="system-row"><span>LANDING ERROR</span><strong>{format(landingError, 1)} <small>M</small></strong></div>
           </section>
 
           <section className="fault-panel panel">
