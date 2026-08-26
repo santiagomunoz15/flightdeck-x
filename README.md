@@ -30,6 +30,52 @@ The flight model is intentionally simplified. The project emphasizes software
 architecture, data integrity, concurrency, and observability rather than
 high-fidelity aerospace simulation.
 
+## Current capabilities
+
+- Deterministic 100 Hz launch, coast, descent, landing-burn, and touchdown simulation
+- Versioned 99-byte binary telemetry with CRC32 and sequence tracking
+- Non-blocking SPSC queue and UDP transmission from the simulation thread
+- TypeScript validation, 60-second history, and multi-client WebSocket streaming
+- Responsive React dashboard with charts, health metrics, and automatic reconnect
+- Quaternion-driven 3D vehicle view with a live ENU trajectory trail
+- Reliable, acknowledged fault commands for thrust loss, sensor noise, and packet loss
+- Mission event timeline and exact-time anomaly markers
+- Automated C++, TypeScript, integration, and production-build checks in CI
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Generator["C++ generator"]
+    SIM["100 Hz flight simulation"] --> QUEUE["Bounded SPSC queue"]
+    QUEUE --> TX["UDP transmitter"]
+    CONTROL["TCP control listener"] --> FAULTS["Atomic fault state"]
+    FAULTS --> SIM
+  end
+
+  subgraph Stream["TypeScript streaming server"]
+    VALIDATE["Packet validation + CRC"] --> HISTORY["Bounded 60 s history"]
+    HISTORY --> WS["WebSocket broadcaster"]
+    COMMANDS["Command validation + retry"]
+  end
+
+  subgraph UI["React mission control"]
+    DASH["Metrics, charts, 3D trajectory"]
+    OPERATIONS["Fault controls + event log"]
+  end
+
+  TX -. "UDP / 100 Hz binary telemetry" .-> VALIDATE
+  WS -->|"JSON history + live samples"| DASH
+  OPERATIONS -->|"WebSocket command"| COMMANDS
+  COMMANDS -->|"Reliable TCP command"| CONTROL
+  CONTROL -->|"Acknowledgement"| COMMANDS
+  COMMANDS -->|"WebSocket acknowledgement"| OPERATIONS
+```
+
+Telemetry favors freshness and remains non-blocking over UDP. Commands use TCP
+and application-level IDs so they can be retained, retried after reconnect, and
+acknowledged by the simulator.
+
 ## Technology stack
 
 - **Generator:** C++20 and CMake
@@ -88,6 +134,9 @@ The dashboard is available at `http://127.0.0.1:5173`. The server listens for
 simulator UDP packets on port 5000 and serves browser WebSocket clients on port
 8080. New clients receive up to 60 seconds of buffered history before live
 streaming begins.
+
+For a concise walkthrough of the complete system, see the
+[`docs/demo.md`](docs/demo.md) presentation script.
 
 ## Development roadmap
 
