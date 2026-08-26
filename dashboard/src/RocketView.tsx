@@ -1,21 +1,16 @@
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Box3, BufferGeometry, Group, Line as ThreeLine, LineBasicMaterial, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 type Position = [number, number, number];
 
-const MAX_DISPLAY_ALTITUDE_M = 2500;
 const ROCKET_HEIGHT_M = 50;
-const ROCKET_DISPLAY_HEIGHT = 1.2;
-const ROCKET_DISPLAY_SCALE = ROCKET_DISPLAY_HEIGHT / ROCKET_HEIGHT_M;
-const ALTITUDE_DISPLAY_TRAVEL = 2.6;
-const GROUND_Y = -1.35;
+const CAMERA_FOV_DEGREES = 35;
+const GROUND_Y = 0;
 
 function scenePosition(position: Position): Vector3 {
-  const displayAltitude = Math.min(Math.max(position[2], 0), MAX_DISPLAY_ALTITUDE_M) / MAX_DISPLAY_ALTITUDE_M;
-  const landedRocketCenter = GROUND_Y + ROCKET_DISPLAY_HEIGHT / 2;
-  return new Vector3(position[0] / 1000, landedRocketCenter + displayAltitude * ALTITUDE_DISPLAY_TRAVEL, -position[1] / 1000);
+  return new Vector3(position[0], Math.max(position[2], GROUND_Y), -position[1]);
 }
 
 function TrajectoryTrail({ positions }: { positions: Position[] }) {
@@ -46,13 +41,13 @@ function FlightModel() {
   const { scene } = useLoader(GLTFLoader, "/models/Falcon9.glb");
   const model = useMemo(() => scene.clone(true), [scene]);
   const modelOffset = useMemo(
-    () => new Box3().setFromObject(model).getCenter(new Vector3()).multiplyScalar(-ROCKET_DISPLAY_SCALE),
+    () => new Box3().setFromObject(model).getCenter(new Vector3()).multiplyScalar(-1),
     [model],
   );
   return (
     <primitive
       object={model}
-      scale={ROCKET_DISPLAY_SCALE}
+      scale={1}
       position={modelOffset}
     />
   );
@@ -66,6 +61,7 @@ function Rocket({ orientation, position }: { orientation: [number, number, numbe
       group.current.quaternion.set(x, y, z, w).normalize();
       // Telemetry is East-North-Up; Three.js uses Y as its vertical display axis.
       group.current.position.copy(scenePosition(position));
+      group.current.position.y += ROCKET_HEIGHT_M / 2;
     }
   });
   return (
@@ -77,16 +73,48 @@ function Rocket({ orientation, position }: { orientation: [number, number, numbe
   );
 }
 
+function FlightCamera({ position }: { position: Position }) {
+  const { camera } = useThree();
+  const desiredPosition = useMemo(() => new Vector3(), []);
+  const desiredTarget = useMemo(() => new Vector3(), []);
+  const currentTarget = useMemo(() => new Vector3(0, ROCKET_HEIGHT_M / 2, 0), []);
+
+  useFrame((_, delta) => {
+    const rocket = scenePosition(position);
+    rocket.y += ROCKET_HEIGHT_M / 2;
+
+    // Frame the complete vertical journey from the pad to the vehicle. The
+    // camera distance therefore grows naturally as real altitude increases.
+    const verticalSpan = Math.max(ROCKET_HEIGHT_M * 1.6, rocket.y + ROCKET_HEIGHT_M / 2);
+    const halfFovRadians = CAMERA_FOV_DEGREES * Math.PI / 360;
+    const distance = verticalSpan / (2 * Math.tan(halfFovRadians)) * 1.35;
+    desiredTarget.set(rocket.x / 2, verticalSpan / 2, rocket.z / 2);
+    desiredPosition.set(
+      desiredTarget.x + distance * 0.7,
+      desiredTarget.y + distance * 0.22,
+      desiredTarget.z + distance,
+    );
+
+    const smoothing = 1 - Math.exp(-delta * 2.5);
+    camera.position.lerp(desiredPosition, smoothing);
+    currentTarget.lerp(desiredTarget, smoothing);
+    camera.lookAt(currentTarget);
+  });
+
+  return null;
+}
+
 export function RocketView({ orientation, position, trail, active }: { orientation: [number, number, number, number]; position: Position; trail: Position[]; active: boolean }) {
   return (
     <div className="rocket-view" aria-label="Quaternion-driven rocket orientation">
-      <Canvas camera={{ position: [4.6, 2.4, 5.2], fov: 35 }} dpr={[1, 1.5]}>
+      <Canvas camera={{ position: [90, 45, 130], fov: CAMERA_FOV_DEGREES, near: 0.1, far: 20000 }} dpr={[1, 1.5]}>
         <color attach="background" args={["#0a1014"]} />
         <ambientLight intensity={1.2} /><directionalLight position={[4, 6, 5]} intensity={3.5} color="#e8f6ff" />
         <pointLight position={[-3, -2, 3]} intensity={active ? 5 : 1.5} color="#e86c3e" />
         <TrajectoryTrail positions={trail} />
         <Rocket orientation={orientation} position={position} />
-        <gridHelper args={[10, 20, "#1a4d57", "#10272d"]} position={[0, GROUND_Y, 0]} />
+        <FlightCamera position={position} />
+        <gridHelper args={[5000, 100, "#1a4d57", "#10272d"]} position={[0, GROUND_Y, 0]} />
       </Canvas>
       <span className="view-label">ATTITUDE / BODY FRAME</span>
       <div className="position-overlay">
