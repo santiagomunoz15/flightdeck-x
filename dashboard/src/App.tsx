@@ -139,7 +139,7 @@ export default function App() {
         <div className="right-column">
           <section className="attitude-panel panel">
             <div className="panel-heading"><div><span>GUIDANCE</span><h2>Vehicle attitude</h2></div><b>QUATERNION</b></div>
-            <RocketView orientation={sample?.orientationWxyz ?? IDENTITY} position={sample?.positionM ?? [0, 0, 0]} trail={trajectory} thrustPercent={sample?.thrustPercent ?? 0} />
+            <RocketView orientation={sample?.orientationWxyz ?? IDENTITY} position={sample?.positionM ?? [0, 0, 0]} verticalVelocity={sample?.velocityMps[2] ?? 0} missionPhase={sample?.missionPhase ?? "PRELAUNCH"} trail={trajectory} thrustPercent={sample?.thrustPercent ?? 0} />
             <div className="quaternion-readout">{["W", "X", "Y", "Z"].map((label, index) => <div key={label}><span>{label}</span><strong>{format(sample?.orientationWxyz[index], 3)}</strong></div>)}</div>
           </section>
 

@@ -1,7 +1,8 @@
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef } from "react";
-import { Box3, BufferGeometry, Float32BufferAttribute, Group, Line as ThreeLine, LineBasicMaterial, Mesh, Object3D, Quaternion, Vector3 } from "three";
+import { AnimationMixer, Box3, BufferGeometry, Float32BufferAttribute, Group, Line as ThreeLine, LineBasicMaterial, LoopOnce, Mesh, Object3D, Quaternion, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { MissionPhase } from "./types";
 
 type Position = [number, number, number];
 
@@ -11,6 +12,7 @@ const CAMERA_FOV_DEGREES = 35;
 const GROUND_Y = 0;
 const LANDING_TARGET_EAST_M = 1000;
 const MAX_TRAIL_POINTS = 512;
+const LEG_DEPLOYMENT_ALTITUDE_M = 75;
 
 function scenePosition(position: Position): Vector3 {
   return new Vector3(position[0], Math.max(position[2], GROUND_Y), -position[1]);
@@ -54,9 +56,14 @@ function FallbackRocket() {
   );
 }
 
-function FlightModel({ thrustPercent }: { thrustPercent: number }) {
-  const { scene } = useLoader(GLTFLoader, "/models/Falcon9.glb");
+function FlightModel({ thrustPercent, altitude, verticalVelocity, missionPhase }: { thrustPercent: number; altitude: number; verticalVelocity: number; missionPhase: MissionPhase }) {
+  const { scene, animations } = useLoader(GLTFLoader, "/models/Falcon9.glb");
   const model = useMemo(() => scene.clone(true), [scene]);
+  const mixer = useMemo(() => new AnimationMixer(model), [model]);
+  const legActions = useMemo(() => animations
+    .filter((clip) => clip.name.toLowerCase().includes("landing leg"))
+    .map((clip) => mixer.clipAction(clip)), [animations, mixer]);
+  const legsDeployed = useRef(false);
   const { modelOffset, plumes } = useMemo(() => {
     const exhausts: Object3D[] = [];
     model.traverse((object) => {
@@ -93,7 +100,45 @@ function FlightModel({ thrustPercent }: { thrustPercent: number }) {
     };
   }, [model]);
 
-  useFrame(({ clock }) => {
+  useEffect(() => {
+    for (const action of legActions) {
+      action.reset();
+      action.setLoop(LoopOnce, 1);
+      action.clampWhenFinished = true;
+      action.paused = true;
+      action.play();
+    }
+    mixer.setTime(0);
+    return () => {
+      mixer.stopAllAction();
+      mixer.uncacheRoot(model);
+    };
+  }, [legActions, mixer, model]);
+
+  useFrame(({ clock }, delta) => {
+    if (missionPhase === "PRELAUNCH" && legsDeployed.current) {
+      for (const action of legActions) {
+        action.reset();
+        action.paused = true;
+        action.play();
+      }
+      mixer.setTime(0);
+      legsDeployed.current = false;
+    } else if (!legsDeployed.current &&
+        ((verticalVelocity < 0 && altitude <= LEG_DEPLOYMENT_ALTITUDE_M) || missionPhase === "LANDED")) {
+      for (const action of legActions) {
+        action.reset();
+        action.paused = false;
+        action.play();
+      }
+      if (missionPhase === "LANDED") {
+        mixer.setTime(Math.max(0, ...animations.map((clip) => clip.duration)));
+        for (const action of legActions) action.paused = true;
+      }
+      legsDeployed.current = true;
+    }
+    mixer.update(Math.min(delta, 0.1));
+
     const thrust = Math.min(Math.max(thrustPercent, 0), 100) / 100;
     const flicker = 1 + Math.sin(clock.elapsedTime * 31) * 0.055 + Math.sin(clock.elapsedTime * 47) * 0.025;
     for (const { object: plume, baseScale, baseHeight } of plumes) {
@@ -121,7 +166,7 @@ function FlightModel({ thrustPercent }: { thrustPercent: number }) {
   );
 }
 
-function Rocket({ orientation, position, thrustPercent }: { orientation: [number, number, number, number]; position: Position; thrustPercent: number }) {
+function Rocket({ orientation, position, verticalVelocity, missionPhase, thrustPercent }: { orientation: [number, number, number, number]; position: Position; verticalVelocity: number; missionPhase: MissionPhase; thrustPercent: number }) {
   const group = useRef<Group>(null);
   const targetPosition = useMemo(() => new Vector3(), []);
   const targetOrientation = useMemo(() => new Quaternion(), []);
@@ -147,7 +192,7 @@ function Rocket({ orientation, position, thrustPercent }: { orientation: [number
   return (
     <group ref={group}>
       <Suspense fallback={<FallbackRocket />}>
-        <FlightModel thrustPercent={thrustPercent} />
+        <FlightModel thrustPercent={thrustPercent} altitude={position[2]} verticalVelocity={verticalVelocity} missionPhase={missionPhase} />
       </Suspense>
     </group>
   );
@@ -190,7 +235,7 @@ function FlightCamera({ position }: { position: Position }) {
   return null;
 }
 
-export function RocketView({ orientation, position, trail, thrustPercent }: { orientation: [number, number, number, number]; position: Position; trail: Position[]; thrustPercent: number }) {
+export function RocketView({ orientation, position, verticalVelocity, missionPhase, trail, thrustPercent }: { orientation: [number, number, number, number]; position: Position; verticalVelocity: number; missionPhase: MissionPhase; trail: Position[]; thrustPercent: number }) {
   return (
     <div className="rocket-view" aria-label="Quaternion-driven rocket orientation">
       <Canvas camera={{ position: [90, 45, 130], fov: CAMERA_FOV_DEGREES, near: 0.1, far: 20000 }} dpr={[1, 1.5]}>
@@ -198,7 +243,7 @@ export function RocketView({ orientation, position, trail, thrustPercent }: { or
         <ambientLight intensity={1.2} /><directionalLight position={[4, 6, 5]} intensity={3.5} color="#e8f6ff" />
         <pointLight position={[-3, -2, 3]} intensity={thrustPercent > 0 ? 5 : 1.5} color="#e86c3e" />
         <TrajectoryTrail positions={trail} />
-        <Rocket orientation={orientation} position={position} thrustPercent={thrustPercent} />
+        <Rocket orientation={orientation} position={position} verticalVelocity={verticalVelocity} missionPhase={missionPhase} thrustPercent={thrustPercent} />
         <FlightCamera position={position} />
         <mesh position={[LANDING_TARGET_EAST_M, 0.6, 0]}>
           <cylinderGeometry args={[24, 24, 1.2, 32]} />
