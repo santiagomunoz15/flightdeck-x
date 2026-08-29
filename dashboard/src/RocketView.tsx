@@ -110,8 +110,10 @@ function FlightModel({ thrustPercent, altitude, verticalVelocity, missionPhase }
     }
     mixer.setTime(0);
     return () => {
+      // Strict Mode immediately runs this effect again with the same memoized
+      // actions. uncacheRoot() would invalidate their bindings and crash when
+      // the second setup calls play(); stopping is sufficient for teardown.
       mixer.stopAllAction();
-      mixer.uncacheRoot(model);
     };
   }, [legActions, mixer, model]);
 
