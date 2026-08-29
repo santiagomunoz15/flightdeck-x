@@ -52,15 +52,23 @@ void FlightSimulation::normalize_orientation() noexcept {
 }
 
 void FlightSimulation::update_orientation(double thrust_east_n,
+                                          double thrust_north_n,
                                           double thrust_up_n) noexcept {
-  if (std::hypot(thrust_east_n, thrust_up_n) <=
-      std::numeric_limits<double>::epsilon()) {
+  const double magnitude = std::hypot(
+      std::hypot(thrust_east_n, thrust_north_n), thrust_up_n);
+  if (magnitude <= std::numeric_limits<double>::epsilon()) {
     return;
   }
-  const double pitch_from_vertical = std::atan2(thrust_east_n, thrust_up_n);
-  state_.orientation_wxyz = {
-      std::cos(pitch_from_vertical / 2.0), 0.0,
-      std::sin(pitch_from_vertical / 2.0), 0.0};
+  const double east = thrust_east_n / magnitude;
+  const double north = thrust_north_n / magnitude;
+  const double up = thrust_up_n / magnitude;
+  const double scalar = std::sqrt(std::max(0.0, (1.0 + up) / 2.0));
+  if (scalar <= std::numeric_limits<double>::epsilon()) {
+    state_.orientation_wxyz = {0.0, 1.0, 0.0, 0.0};
+  } else {
+    state_.orientation_wxyz = {
+        scalar, -north / (2.0 * scalar), east / (2.0 * scalar), 0.0};
+  }
 }
 
 void FlightSimulation::step(double dt_s) noexcept {
@@ -73,6 +81,7 @@ void FlightSimulation::step(double dt_s) noexcept {
   state_.phase_time_s += dt_s;
   state_.thrust_n = 0.0;
   state_.horizontal_acceleration_mps2 = 0.0;
+  state_.crossrange_acceleration_mps2 = 0.0;
 
   switch (state_.phase) {
     case MissionPhase::prelaunch:
@@ -90,15 +99,22 @@ void FlightSimulation::step(double dt_s) noexcept {
       const double thrust_east_n = std::min(
           state_.mass_kg * config_.ascent_horizontal_acceleration_mps2,
           state_.thrust_n * 0.25);
+      const double thrust_north_n = std::min(
+          state_.mass_kg * config_.ascent_crossrange_acceleration_mps2,
+          state_.thrust_n * 0.1);
       const double thrust_up_n = std::sqrt(std::max(
-          0.0, state_.thrust_n * state_.thrust_n - thrust_east_n * thrust_east_n));
+          0.0, state_.thrust_n * state_.thrust_n -
+              thrust_east_n * thrust_east_n - thrust_north_n * thrust_north_n));
       state_.horizontal_acceleration_mps2 = thrust_east_n / state_.mass_kg;
+      state_.crossrange_acceleration_mps2 = thrust_north_n / state_.mass_kg;
       state_.acceleration_mps2 = thrust_up_n / state_.mass_kg - config_.gravity_mps2;
       state_.horizontal_velocity_mps += state_.horizontal_acceleration_mps2 * dt_s;
+      state_.crossrange_velocity_mps += state_.crossrange_acceleration_mps2 * dt_s;
       state_.velocity_mps += state_.acceleration_mps2 * dt_s;
       state_.downrange_m += state_.horizontal_velocity_mps * dt_s;
+      state_.crossrange_m += state_.crossrange_velocity_mps * dt_s;
       state_.altitude_m += state_.velocity_mps * dt_s;
-      update_orientation(thrust_east_n, thrust_up_n);
+      update_orientation(thrust_east_n, thrust_north_n, thrust_up_n);
       const double predicted_ballistic_apogee = state_.altitude_m +
           state_.velocity_mps * state_.velocity_mps / (2.0 * config_.gravity_mps2);
       if (predicted_ballistic_apogee >= config_.target_apogee_m ||
@@ -112,13 +128,27 @@ void FlightSimulation::step(double dt_s) noexcept {
       state_.acceleration_mps2 = -config_.gravity_mps2;
       state_.velocity_mps += state_.acceleration_mps2 * dt_s;
       state_.downrange_m += state_.horizontal_velocity_mps * dt_s;
+      state_.crossrange_m += state_.crossrange_velocity_mps * dt_s;
       state_.altitude_m += state_.velocity_mps * dt_s;
       if (state_.velocity_mps <= 0.0) transition_to(MissionPhase::descent);
       break;
     case MissionPhase::descent:
       state_.acceleration_mps2 = -config_.gravity_mps2;
+      state_.horizontal_acceleration_mps2 = std::clamp(
+          (config_.target_downrange_m - state_.downrange_m) * 0.0008 -
+              state_.horizontal_velocity_mps * 0.018,
+          -config_.maximum_grid_fin_acceleration_mps2,
+          config_.maximum_grid_fin_acceleration_mps2);
+      state_.crossrange_acceleration_mps2 = std::clamp(
+          (config_.target_crossrange_m - state_.crossrange_m) * 0.0008 -
+              state_.crossrange_velocity_mps * 0.018,
+          -config_.maximum_grid_fin_acceleration_mps2,
+          config_.maximum_grid_fin_acceleration_mps2);
+      state_.horizontal_velocity_mps += state_.horizontal_acceleration_mps2 * dt_s;
+      state_.crossrange_velocity_mps += state_.crossrange_acceleration_mps2 * dt_s;
       state_.velocity_mps += state_.acceleration_mps2 * dt_s;
       state_.downrange_m += state_.horizontal_velocity_mps * dt_s;
+      state_.crossrange_m += state_.crossrange_velocity_mps * dt_s;
       state_.altitude_m += state_.velocity_mps * dt_s;
       if (should_start_landing_burn()) transition_to(MissionPhase::landing_burn);
       break;
@@ -131,33 +161,46 @@ void FlightSimulation::step(double dt_s) noexcept {
               : 0.0;
       const double remaining_range = config_.target_downrange_m - state_.downrange_m;
       const double desired_horizontal_acceleration = std::clamp(
-          remaining_range * 0.04 - state_.horizontal_velocity_mps * 0.4,
+          remaining_range * 0.08 - state_.horizontal_velocity_mps * 0.57,
+          -4.0, 4.0);
+      const double remaining_crossrange = config_.target_crossrange_m - state_.crossrange_m;
+      const double desired_crossrange_acceleration = std::clamp(
+          remaining_crossrange * 0.08 - state_.crossrange_velocity_mps * 0.57,
           -4.0, 4.0);
       double thrust_east_n = state_.mass_kg * desired_horizontal_acceleration;
+      double thrust_north_n = state_.mass_kg * desired_crossrange_acceleration;
       double thrust_up_n = state_.mass_kg *
                            (config_.gravity_mps2 + desired_upward_acceleration);
       const double maximum_thrust = config_.maximum_thrust_n *
                                     (thruster_loss_ ? 0.6 : 1.0);
-      const double requested_thrust = std::hypot(thrust_east_n, thrust_up_n);
+      const double requested_thrust = std::hypot(
+          std::hypot(thrust_east_n, thrust_north_n), thrust_up_n);
       if (requested_thrust > maximum_thrust) {
         const double scale = maximum_thrust / requested_thrust;
         thrust_east_n *= scale;
+        thrust_north_n *= scale;
         thrust_up_n *= scale;
       }
-      state_.thrust_n = std::hypot(thrust_east_n, thrust_up_n);
+      state_.thrust_n = std::hypot(
+          std::hypot(thrust_east_n, thrust_north_n), thrust_up_n);
       state_.horizontal_acceleration_mps2 = thrust_east_n / state_.mass_kg;
+      state_.crossrange_acceleration_mps2 = thrust_north_n / state_.mass_kg;
       state_.acceleration_mps2 = thrust_up_n / state_.mass_kg - config_.gravity_mps2;
       state_.horizontal_velocity_mps += state_.horizontal_acceleration_mps2 * dt_s;
+      state_.crossrange_velocity_mps += state_.crossrange_acceleration_mps2 * dt_s;
       state_.velocity_mps += state_.acceleration_mps2 * dt_s;
       state_.downrange_m += state_.horizontal_velocity_mps * dt_s;
+      state_.crossrange_m += state_.crossrange_velocity_mps * dt_s;
       state_.altitude_m += state_.velocity_mps * dt_s;
-      update_orientation(thrust_east_n, thrust_up_n);
+      update_orientation(thrust_east_n, thrust_north_n, thrust_up_n);
       if (state_.altitude_m <= 0.0) {
         state_.altitude_m = 0.0;
         state_.velocity_mps = 0.0;
         state_.horizontal_velocity_mps = 0.0;
+        state_.crossrange_velocity_mps = 0.0;
         state_.acceleration_mps2 = 0.0;
         state_.horizontal_acceleration_mps2 = 0.0;
+        state_.crossrange_acceleration_mps2 = 0.0;
         state_.thrust_n = 0.0;
         transition_to(MissionPhase::landed);
       }

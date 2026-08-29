@@ -11,6 +11,7 @@ const FULL_THRUST_PLUME_LENGTH_M = 70;
 const CAMERA_FOV_DEGREES = 35;
 const GROUND_Y = 0;
 const LANDING_TARGET_EAST_M = 1000;
+const LANDING_TARGET_NORTH_M = 200;
 const MAX_TRAIL_POINTS = 512;
 const LEG_DEPLOYMENT_ALTITUDE_M = 75;
 
@@ -247,7 +248,7 @@ export function RocketView({ orientation, position, verticalVelocity, missionPha
         <TrajectoryTrail positions={trail} />
         <Rocket orientation={orientation} position={position} verticalVelocity={verticalVelocity} missionPhase={missionPhase} thrustPercent={thrustPercent} />
         <FlightCamera position={position} />
-        <mesh position={[LANDING_TARGET_EAST_M, 0.6, 0]}>
+        <mesh position={[LANDING_TARGET_EAST_M, 0.6, -LANDING_TARGET_NORTH_M]}>
           <cylinderGeometry args={[24, 24, 1.2, 32]} />
           <meshStandardMaterial color="#67d6c7" emissive="#1d665e" emissiveIntensity={1.4} />
         </mesh>

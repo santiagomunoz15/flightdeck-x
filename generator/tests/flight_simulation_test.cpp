@@ -23,6 +23,7 @@ struct FlightSummary {
   double landing_time_s{};
   double maximum_altitude_m{};
   double landing_downrange_m{};
+  double landing_crossrange_m{};
   double final_mass_kg{};
 };
 
@@ -33,17 +34,20 @@ FlightSummary run_complete_flight() {
   MissionPhase previous_phase = simulation.state().phase;
   double prelanding_vertical_velocity = 0.0;
   double prelanding_horizontal_velocity = 0.0;
+  double prelanding_crossrange_velocity = 0.0;
   std::array<bool, 6> phases_seen{};
   phases_seen[0] = true;
 
   for (int step = 0; step < 30'000; ++step) {
     prelanding_vertical_velocity = simulation.state().velocity_mps;
     prelanding_horizontal_velocity = simulation.state().horizontal_velocity_mps;
+    prelanding_crossrange_velocity = simulation.state().crossrange_velocity_mps;
     simulation.step();
     const auto& state = simulation.state();
     maximum_altitude = std::max(maximum_altitude, state.altitude_m);
     require(std::isfinite(state.altitude_m), "altitude became non-finite");
     require(std::isfinite(state.downrange_m), "downrange became non-finite");
+    require(std::isfinite(state.crossrange_m), "crossrange became non-finite");
     require(state.mass_kg <= previous_mass, "mass increased during flight");
     require(state.mass_kg >= simulation.config().dry_mass_kg,
             "mass fell below dry mass");
@@ -71,14 +75,18 @@ FlightSummary run_complete_flight() {
               "maximum altitude missed the 2.4 km target");
       require(std::abs(state.downrange_m - simulation.config().target_downrange_m) < 10.0,
               "landing missed the downrange target");
+      require(std::abs(state.crossrange_m - simulation.config().target_crossrange_m) < 5.0,
+              "landing missed the crossrange target");
       require(state.horizontal_velocity_mps == 0.0,
               "landed horizontal velocity is not zero");
       require(std::abs(prelanding_vertical_velocity) < 3.0,
               "vertical touchdown speed exceeded the limit");
       require(std::abs(prelanding_horizontal_velocity) < 1.1,
               "horizontal touchdown speed exceeded the limit");
+      require(std::abs(prelanding_crossrange_velocity) < 0.3,
+              "crossrange touchdown speed exceeded the limit");
       return {state.simulation_time_s, maximum_altitude, state.downrange_m,
-              state.mass_kg};
+              state.crossrange_m, state.mass_kg};
     }
   }
 
@@ -104,6 +112,8 @@ void test_complete_flight_is_deterministic() {
             "maximum altitude is not deterministic");
     require(first.landing_downrange_m == repeated.landing_downrange_m,
             "landing position is not deterministic");
+    require(first.landing_crossrange_m == repeated.landing_crossrange_m,
+            "crossrange position is not deterministic");
     require(first.final_mass_kg == repeated.final_mass_kg,
             "final mass is not deterministic");
   }
@@ -121,6 +131,8 @@ void test_thruster_loss_reduces_acceleration() {
           "thruster-loss fault did not reduce available thrust by 40 percent");
   require(degraded.state().altitude_m < nominal.state().altitude_m,
           "thruster-loss trajectory did not diverge from nominal");
+  require(nominal.state().crossrange_m > 0.0,
+          "powered guidance did not produce northward motion");
 }
 
 }  // namespace

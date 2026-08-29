@@ -30,7 +30,10 @@ struct FlightConfig {
   double landing_burn_margin{1.15};
   double target_apogee_m{2'400.0};
   double target_downrange_m{1'000.0};
+  double target_crossrange_m{200.0};
   double ascent_horizontal_acceleration_mps2{1.05};
+  double ascent_crossrange_acceleration_mps2{0.21};
+  double maximum_grid_fin_acceleration_mps2{0.35};
 };
 
 struct FlightState {
@@ -39,10 +42,13 @@ struct FlightState {
   double phase_time_s{};
   double altitude_m{};
   double downrange_m{};
+  double crossrange_m{};
   double velocity_mps{};
   double horizontal_velocity_mps{};
+  double crossrange_velocity_mps{};
   double acceleration_mps2{};
   double horizontal_acceleration_mps2{};
+  double crossrange_acceleration_mps2{};
   double mass_kg{};
   double thrust_n{};
   std::array<double, 4> orientation_wxyz{1.0, 0.0, 0.0, 0.0};
@@ -60,7 +66,8 @@ class FlightSimulation {
  private:
   void transition_to(MissionPhase next) noexcept;
   void normalize_orientation() noexcept;
-  void update_orientation(double thrust_east_n, double thrust_up_n) noexcept;
+  void update_orientation(double thrust_east_n, double thrust_north_n,
+                          double thrust_up_n) noexcept;
   [[nodiscard]] bool should_start_landing_burn() const noexcept;
 
   FlightConfig config_;

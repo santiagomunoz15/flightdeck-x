@@ -199,10 +199,11 @@ PRELAUNCH -> POWERED_ASCENT -> COAST -> DESCENT -> LANDING_BURN -> LANDED
 Orientation is represented by a quaternion that is normalized after every
 integration step.
 
-The powered-ascent pitch program builds eastward velocity while a predicted
-ballistic-apogee cutoff targets 2.4 km. During the landing burn, a damped
-closed-loop controller removes horizontal velocity and guides the vehicle to a
-pad 1 km downrange.
+The powered-ascent gimbal program builds eastward and northward velocity while
+a predicted ballistic-apogee cutoff targets 2.4 km. Bounded aerodynamic control
+provides grid-fin-like correction during descent. During the landing burn, a
+damped closed-loop controller removes horizontal velocity and guides the vehicle
+to a pad 1 km east and 200 m north of launch.
 
 **Checkpoint:** One-second status samples show plausible altitude, velocity,
 mass, and mission-phase changes across several stable, deterministic flights.

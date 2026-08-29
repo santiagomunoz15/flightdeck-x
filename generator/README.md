@@ -1,8 +1,9 @@
 # Telemetry Generator
 
 The generator contains a deterministic, fixed-step two-dimensional rocket hop.
-The vehicle targets a 2.4 km apogee and a landing pad 1 km east of launch using
-an ascent pitch program and closed-loop horizontal braking during landing.
+The vehicle targets a 2.4 km apogee and a landing pad 1 km east and 200 m north
+of launch using a three-dimensional ascent gimbal program, bounded aerodynamic
+control during descent, and closed-loop horizontal braking during landing.
 Its intentionally simple physics keep mission-state, guidance, and telemetry
 behavior easy to inspect before more realism is added.
 

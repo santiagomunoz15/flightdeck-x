@@ -39,8 +39,8 @@ flightdeck::protocol::Telemetry make_telemetry(
       .sequence = sequence,
       .timestamp_us = static_cast<std::uint64_t>(state.simulation_time_s * 1'000'000.0),
       .mission_phase = wire_phase(state.phase),
-      .position_m = {state.downrange_m, 0.0, state.altitude_m},
-      .velocity_mps = {state.horizontal_velocity_mps, 0.0, state.velocity_mps},
+      .position_m = {state.downrange_m, state.crossrange_m, state.altitude_m},
+      .velocity_mps = {state.horizontal_velocity_mps, state.crossrange_velocity_mps, state.velocity_mps},
       .orientation_wxyz = {
           static_cast<float>(state.orientation_wxyz[0]),
           static_cast<float>(state.orientation_wxyz[1]),
@@ -50,14 +50,16 @@ flightdeck::protocol::Telemetry make_telemetry(
       .thrust_percent = thrust_percent,
       .chamber_pressure_mpa = thrust_percent * 0.12F,
       .fault_flags = fault_flags,
-      .truth_position_m = {state.downrange_m, 0.0, state.altitude_m},
-      .truth_velocity_mps = {state.horizontal_velocity_mps, 0.0, state.velocity_mps},
+      .truth_position_m = {state.downrange_m, state.crossrange_m, state.altitude_m},
+      .truth_velocity_mps = {state.horizontal_velocity_mps, state.crossrange_velocity_mps, state.velocity_mps},
   };
   if ((fault_flags & flightdeck::generator::kSensorNoise) != 0U) {
     telemetry.position_m[2] += std::sin(static_cast<double>(sequence) * 0.173) * 8.0;
     telemetry.velocity_mps[2] += std::sin(static_cast<double>(sequence) * 0.311) * 1.5;
     telemetry.position_m[0] += std::sin(static_cast<double>(sequence) * 0.137) * 3.0;
     telemetry.velocity_mps[0] += std::sin(static_cast<double>(sequence) * 0.271) * 0.6;
+    telemetry.position_m[1] += std::sin(static_cast<double>(sequence) * 0.151) * 3.0;
+    telemetry.velocity_mps[1] += std::sin(static_cast<double>(sequence) * 0.293) * 0.6;
   }
   return telemetry;
 }
@@ -78,8 +80,10 @@ void print_state(const flightdeck::simulation::FlightState& state) {
             << "  phase=" << std::setw(15) << flightdeck::simulation::to_string(state.phase)
             << "  altitude=" << std::setw(8) << state.altitude_m << " m"
             << "  downrange=" << std::setw(8) << state.downrange_m << " m"
+            << "  crossrange=" << std::setw(7) << state.crossrange_m << " m"
             << "  vertical_v=" << std::setw(8) << state.velocity_mps << " m/s"
             << "  east_v=" << std::setw(7) << state.horizontal_velocity_mps << " m/s"
+            << "  north_v=" << std::setw(6) << state.crossrange_velocity_mps << " m/s"
             << "  mass=" << std::setw(8) << state.mass_kg << " kg"
             << "  thrust=" << std::setw(7) << state.thrust_n / 1'000.0 << " kN\n";
 }
