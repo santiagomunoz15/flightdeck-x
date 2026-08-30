@@ -17,6 +17,10 @@ software architecture surrounding a flight system: deterministic state updates,
 explicit wire contracts, concurrency, data validation, observability, closed-loop
 guidance, and operator interaction.
 
+## Demo
+
+![Demo video](./docs/DemoGIF.gif)
+
 ## Flight and 3D experience
 
 The simulated booster ascends to a target apogee of 2.4 km, travels toward a
