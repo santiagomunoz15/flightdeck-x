@@ -16,6 +16,19 @@ const MAX_TRAIL_POINTS = 512;
 const LEG_DEPLOYMENT_ALTITUDE_M = 75;
 const DEGREES_TO_RADIANS = Math.PI / 180;
 
+function normalizedModelName(name: string): string {
+  return name.replace(/[\s_-]/g, "").toLowerCase();
+}
+
+function findModelObject(root: Object3D, name: string): Object3D | undefined {
+  const target = normalizedModelName(name);
+  let match: Object3D | undefined;
+  root.traverse((object) => {
+    if (!match && normalizedModelName(object.name) === target) match = object;
+  });
+  return match;
+}
+
 function scenePosition(position: Position): Vector3 {
   return new Vector3(position[0], Math.max(position[2], GROUND_Y), -position[1]);
 }
@@ -66,14 +79,14 @@ function FlightModel({ thrustPercent, position, velocity, missionPhase, gimbalCo
     .filter((clip) => clip.name.toLowerCase().includes("landing leg"))
     .map((clip) => mixer.clipAction(clip)), [animations, mixer]);
   const gridFinActions = useMemo(() => animations
-    .filter((clip) => clip.tracks.some((track) => track.name.toLowerCase().includes("grid fin")))
+    .filter((clip) => clip.tracks.some((track) => normalizedModelName(track.name).includes("gridfin")))
     .map((clip) => mixer.clipAction(clip)), [animations, mixer]);
   const legsDeployed = useRef(false);
   const gridFinsDeployed = useRef(false);
   const { modelOffset, plumes, gridFinPivots, engineGimbal } = useMemo(() => {
     const exhausts: Object3D[] = [];
     model.traverse((object) => {
-      const normalizedName = object.name.replace(/[\s_-]/g, "").toLowerCase();
+      const normalizedName = normalizedModelName(object.name);
       const materials = object instanceof Mesh
         ? (Array.isArray(object.material) ? object.material : [object.material])
         : [];
@@ -83,7 +96,7 @@ function FlightModel({ thrustPercent, position, velocity, missionPhase, gimbalCo
     });
 
     const steeringPivots: Array<{ pivot: Object3D; axis: Vector3 }> = [];
-    for (const fin of [1, 2, 3, 4].map((number) => model.getObjectByName(`Grid Fin ${number}`))) {
+    for (const fin of [1, 2, 3, 4].map((number) => findModelObject(model, `Grid Fin ${number}`))) {
       if (!fin?.parent) continue;
       const parent = fin.parent;
       const pivot = new Object3D();
