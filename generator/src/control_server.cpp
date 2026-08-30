@@ -80,19 +80,30 @@ void ControlServer::handle_client(int client_fd) noexcept {
 
 std::string ControlServer::handle_command(const std::string& line) noexcept {
   std::istringstream input(line);
-  std::string verb, id, fault, enabled_text;
+  std::string verb, id, control, enabled_text;
   if (!std::getline(input, verb, '\t') || !std::getline(input, id, '\t') ||
-      !std::getline(input, fault, '\t') || !std::getline(input, enabled_text) ||
+      !std::getline(input, control, '\t') || !std::getline(input, enabled_text) ||
       verb != "COMMAND" || id.empty()) {
     return "ERROR\tmalformed_command\n";
   }
-  const std::uint32_t mask = fault_mask(fault);
-  if (mask == 0 || (enabled_text != "0" && enabled_text != "1")) {
-    return "ERROR\tinvalid_fault\n";
+  if (enabled_text != "0" && enabled_text != "1") {
+    return "ERROR\tinvalid_control\n";
   }
-  if (enabled_text == "1") fault_flags_.fetch_or(mask, std::memory_order_acq_rel);
-  else fault_flags_.fetch_and(~mask, std::memory_order_acq_rel);
-  return "ACK\t" + id + "\t" + fault + "\t" + enabled_text + "\n";
+  const bool enabled = enabled_text == "1";
+  const std::uint32_t mask = fault_mask(control);
+  if (mask != 0U) {
+    if (enabled) fault_flags_.fetch_or(mask, std::memory_order_acq_rel);
+    else fault_flags_.fetch_and(~mask, std::memory_order_acq_rel);
+  } else if (control == "pause") {
+    paused_.store(enabled, std::memory_order_release);
+  } else if (control == "abort") {
+    if (enabled) abort_requested_.store(true, std::memory_order_release);
+  } else if (control == "fts") {
+    if (enabled) fts_requested_.store(true, std::memory_order_release);
+  } else {
+    return "ERROR\tinvalid_control\n";
+  }
+  return "ACK\t" + id + "\t" + control + "\t" + enabled_text + "\n";
 }
 
 void ControlServer::stop() noexcept {

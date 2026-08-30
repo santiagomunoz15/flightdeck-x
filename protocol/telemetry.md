@@ -35,6 +35,7 @@ IEEE 754 binary representation, with those bits written in big-endian order.
 | 3 | `DESCENT` |
 | 4 | `LANDING_BURN` |
 | 5 | `LANDED` |
+| 6 | `TERMINATED` |
 
 ## Coordinate and orientation conventions
 

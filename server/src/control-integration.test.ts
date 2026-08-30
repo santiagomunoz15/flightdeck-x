@@ -57,11 +57,11 @@ describe("browser to simulator control integration", () => {
 
     const acknowledgement = waitForType(client, "command_ack");
     client.send(JSON.stringify({
-      type: "command", id: "test-command-1", fault: "thruster_loss",
+      type: "command", id: "test-command-1", control: "thruster_loss",
       enabled: true, issuedAtMs: Date.now(),
     }));
     expect(await acknowledgement).toMatchObject({
-      type: "command_ack", id: "test-command-1", fault: "thruster_loss", enabled: true,
+      type: "command_ack", id: "test-command-1", control: "thruster_loss", enabled: true,
     });
   });
 });

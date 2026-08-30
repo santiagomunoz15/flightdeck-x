@@ -15,6 +15,7 @@ const PHASE_EVENTS: Partial<Record<TelemetrySample["missionPhase"], string>> = {
   DESCENT: "APOGEE / DESCENT INITIATED",
   LANDING_BURN: "LANDING BURN IGNITION",
   LANDED: "TOUCHDOWN",
+  TERMINATED: "SIMULATED FLIGHT TERMINATED",
 };
 
 const FAULTS = [
@@ -38,7 +39,8 @@ export function deriveMissionEvents(samples: TelemetrySample[]): MissionEvent[] 
         timestampUs: sample.timestampUs,
         sequence: sample.sequence,
         category: "phase",
-        severity: label === "HARD LANDING" ? "warning" : label === "VEHICLE IMPACT" ? "critical" : "info",
+        severity: label === "HARD LANDING" ? "warning" :
+          label === "VEHICLE IMPACT" || sample.missionPhase === "TERMINATED" ? "critical" : "info",
         label,
       });
     }

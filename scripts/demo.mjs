@@ -14,7 +14,7 @@ if (!existsSync(simulator)) {
 const children = [];
 let shuttingDown = false;
 
-function launch(command, args, label) {
+function launch(command, args, label, endsDemo = true) {
   const child = spawn(command, args, { stdio: "inherit", env: process.env });
   children.push(child);
   child.on("error", (error) => {
@@ -24,7 +24,7 @@ function launch(command, args, label) {
   child.on("exit", (code, signal) => {
     if (shuttingDown) return;
     console.log(`${label} ended${signal ? ` from ${signal}` : ` with code ${code ?? 0}`}.`);
-    shutdown(code ?? 0);
+    if (endsDemo) shutdown(code ?? 0);
   });
   return child;
 }
@@ -48,5 +48,5 @@ launch("npm", ["run", "dev:dashboard"], "Dashboard");
 setTimeout(() => {
   if (shuttingDown) return;
   console.log("Starting the 100 Hz flight simulator...");
-  launch(simulator, [], "Simulator");
+  launch(simulator, [], "Simulator", false);
 }, 1500);

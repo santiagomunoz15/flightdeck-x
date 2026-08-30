@@ -26,6 +26,7 @@ flightdeck::protocol::MissionPhase wire_phase(MissionPhase phase) {
     case MissionPhase::descent: return WirePhase::descent;
     case MissionPhase::landing_burn: return WirePhase::landing_burn;
     case MissionPhase::landed: return WirePhase::landed;
+    case MissionPhase::terminated: return WirePhase::terminated;
   }
   return WirePhase::prelaunch;
 }
@@ -137,10 +138,20 @@ int main(int argc, char* argv[]) {
   print_state(simulation.state());
 
   while (simulation.state().phase != MissionPhase::landed &&
+         simulation.state().phase != MissionPhase::terminated &&
          (maximum_steps == 0 || step_count < maximum_steps)) {
     if (realtime) {
       next_step += std::chrono::milliseconds{10};
       std::this_thread::sleep_until(next_step);
+    }
+
+    if (control_server.consume_fts_request()) simulation.terminate();
+    else if (control_server.consume_abort_request()) simulation.request_abort();
+    if (control_server.paused() && simulation.state().phase != MissionPhase::landed &&
+        simulation.state().phase != MissionPhase::terminated) {
+      std::this_thread::sleep_for(std::chrono::milliseconds{10});
+      if (realtime) next_step = std::chrono::steady_clock::now();
+      continue;
     }
 
     const std::uint32_t fault_flags = control_server.fault_flags();
@@ -172,7 +183,9 @@ int main(int argc, char* argv[]) {
 
   std::cout << (simulation.state().phase == MissionPhase::landed
                     ? "Flight complete after "
-                    : "Simulation stopped after ")
+                    : simulation.state().phase == MissionPhase::terminated
+                        ? "Simulation terminated after "
+                        : "Simulation stopped after ")
             << step_count << " fixed steps at 100 Hz\n";
   if (network_enabled) {
     std::cout << "UDP queued=" << network_stats.queued

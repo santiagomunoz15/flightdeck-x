@@ -14,12 +14,26 @@ std::string_view to_string(MissionPhase phase) noexcept {
     case MissionPhase::descent: return "DESCENT";
     case MissionPhase::landing_burn: return "LANDING_BURN";
     case MissionPhase::landed: return "LANDED";
+    case MissionPhase::terminated: return "TERMINATED";
   }
   return "UNKNOWN";
 }
 
 FlightSimulation::FlightSimulation(FlightConfig config) : config_(config) {
   state_.mass_kg = config_.initial_mass_kg;
+}
+
+void FlightSimulation::request_abort() noexcept {
+  if (state_.phase == MissionPhase::prelaunch) transition_to(MissionPhase::landed);
+  else if (state_.phase == MissionPhase::powered_ascent) transition_to(MissionPhase::coast);
+}
+
+void FlightSimulation::terminate() noexcept {
+  state_.thrust_n = 0.0;
+  state_.acceleration_mps2 = 0.0;
+  state_.horizontal_acceleration_mps2 = 0.0;
+  state_.crossrange_acceleration_mps2 = 0.0;
+  transition_to(MissionPhase::terminated);
 }
 
 void FlightSimulation::transition_to(MissionPhase next) noexcept {
@@ -73,7 +87,7 @@ void FlightSimulation::update_orientation(double thrust_east_n,
 
 void FlightSimulation::step(double dt_s) noexcept {
   if (!(dt_s > 0.0) || !std::isfinite(dt_s) ||
-      state_.phase == MissionPhase::landed) {
+      state_.phase == MissionPhase::landed || state_.phase == MissionPhase::terminated) {
     return;
   }
 
@@ -207,6 +221,7 @@ void FlightSimulation::step(double dt_s) noexcept {
       break;
     }
     case MissionPhase::landed:
+    case MissionPhase::terminated:
       break;
   }
 

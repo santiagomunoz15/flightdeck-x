@@ -19,6 +19,7 @@ enum class MissionPhase : std::uint8_t {
   descent = 3,
   landing_burn = 4,
   landed = 5,
+  terminated = 6,
 };
 
 static_assert(sizeof(std::uint16_t) == 2);

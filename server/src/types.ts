@@ -1,4 +1,4 @@
-export const missionPhases = ["PRELAUNCH", "POWERED_ASCENT", "COAST", "DESCENT", "LANDING_BURN", "LANDED"] as const;
+export const missionPhases = ["PRELAUNCH", "POWERED_ASCENT", "COAST", "DESCENT", "LANDING_BURN", "LANDED", "TERMINATED"] as const;
 export type MissionPhase = (typeof missionPhases)[number];
 
 export interface TelemetrySample {
@@ -25,13 +25,14 @@ export interface StreamMetrics {
 }
 
 export type FaultType = "thruster_loss" | "sensor_noise" | "packet_loss";
-export interface FaultCommand { type: "command"; id: string; fault: FaultType; enabled: boolean; issuedAtMs: number; }
-export type ClientMessage = FaultCommand;
+export type ControlType = FaultType | "pause" | "abort" | "fts";
+export interface ControlCommand { type: "command"; id: string; control: ControlType; enabled: boolean; issuedAtMs: number; }
+export type ClientMessage = ControlCommand;
 
 export type ServerMessage =
   | { type: "history"; samples: TelemetrySample[]; metrics: StreamMetrics }
   | { type: "reset"; metrics: StreamMetrics }
   | { type: "telemetry"; sample: TelemetrySample; metrics: StreamMetrics }
   | { type: "control_status"; connected: boolean }
-  | { type: "command_ack"; id: string; fault: FaultType; enabled: boolean; acknowledgedAtMs: number }
+  | { type: "command_ack"; id: string; control: ControlType; enabled: boolean; acknowledgedAtMs: number }
   | { type: "command_error"; id?: string; message: string };

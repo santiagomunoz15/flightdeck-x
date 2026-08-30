@@ -1,14 +1,14 @@
 import { createConnection, type Socket } from "node:net";
-import type { FaultCommand, FaultType } from "./types.js";
+import type { ControlCommand, ControlType } from "./types.js";
 
 interface ControlCallbacks {
   onStatus(connected: boolean): void;
-  onAcknowledgement(id: string, fault: FaultType, enabled: boolean): void;
+  onAcknowledgement(id: string, control: ControlType, enabled: boolean): void;
 }
 
 export class SimulatorControlClient {
   #socket: Socket | undefined;
-  #pending = new Map<string, FaultCommand>();
+  #pending = new Map<string, ControlCommand>();
   #buffer = "";
   #running = false;
   #connected = false;
@@ -18,7 +18,7 @@ export class SimulatorControlClient {
   get connected(): boolean { return this.#connected; }
 
   start(): void { this.#running = true; this.#connect(); }
-  send(command: FaultCommand): void {
+  send(command: ControlCommand): void {
     this.#pending.set(command.id, command);
     this.#write(command);
   }
@@ -48,9 +48,9 @@ export class SimulatorControlClient {
     });
   }
 
-  #write(command: FaultCommand): void {
+  #write(command: ControlCommand): void {
     if (!this.#connected || !this.#socket) return;
-    this.#socket.write(`COMMAND\t${command.id}\t${command.fault}\t${command.enabled ? 1 : 0}\n`);
+    this.#socket.write(`COMMAND\t${command.id}\t${command.control}\t${command.enabled ? 1 : 0}\n`);
   }
 
   #acceptData(chunk: string): void {
@@ -58,10 +58,10 @@ export class SimulatorControlClient {
     for (let newline; (newline = this.#buffer.indexOf("\n")) >= 0;) {
       const line = this.#buffer.slice(0, newline);
       this.#buffer = this.#buffer.slice(newline + 1);
-      const [verb, id, fault, enabled] = line.split("\t");
-      if (verb !== "ACK" || !id || !isFault(fault) || (enabled !== "0" && enabled !== "1")) continue;
+      const [verb, id, control, enabled] = line.split("\t");
+      if (verb !== "ACK" || !id || !isControl(control) || (enabled !== "0" && enabled !== "1")) continue;
       this.#pending.delete(id);
-      this.callbacks.onAcknowledgement(id, fault, enabled === "1");
+      this.callbacks.onAcknowledgement(id, control, enabled === "1");
     }
   }
 
@@ -72,6 +72,7 @@ export class SimulatorControlClient {
   }
 }
 
-export function isFault(value: unknown): value is FaultType {
-  return value === "thruster_loss" || value === "sensor_noise" || value === "packet_loss";
+export function isControl(value: unknown): value is ControlType {
+  return value === "thruster_loss" || value === "sensor_noise" || value === "packet_loss" ||
+    value === "pause" || value === "abort" || value === "fts";
 }

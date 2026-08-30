@@ -15,6 +15,7 @@ enum class MissionPhase : std::uint8_t {
   descent,
   landing_burn,
   landed,
+  terminated,
 };
 
 [[nodiscard]] std::string_view to_string(MissionPhase phase) noexcept;
@@ -59,6 +60,8 @@ class FlightSimulation {
   explicit FlightSimulation(FlightConfig config = {});
   void step(double dt_s = kFixedStepSeconds) noexcept;
   void set_thruster_loss(bool enabled) noexcept { thruster_loss_ = enabled; }
+  void request_abort() noexcept;
+  void terminate() noexcept;
 
   [[nodiscard]] const FlightState& state() const noexcept { return state_; }
   [[nodiscard]] const FlightConfig& config() const noexcept { return config_; }

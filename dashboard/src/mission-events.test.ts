@@ -23,4 +23,8 @@ describe("deriveMissionEvents", () => {
     const hard = { ...sample(99, "LANDING_BURN"), truthVelocityMps: [0, 0, -6] as [number, number, number] };
     expect(deriveMissionEvents([hard, sample(100, "LANDED")]).at(-1)).toMatchObject({ label: "HARD LANDING", severity: "warning" });
   });
+  it("records simulated flight termination as critical", () => {
+    expect(deriveMissionEvents([sample(10, "POWERED_ASCENT"), sample(11, "TERMINATED")]).at(-1))
+      .toMatchObject({ label: "SIMULATED FLIGHT TERMINATED", severity: "critical" });
+  });
 });

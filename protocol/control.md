@@ -1,6 +1,6 @@
 # FlightDeck X Control Protocol
 
-Fault commands travel over a persistent TCP connection from the TypeScript
+Fault and mission-operation commands travel over a persistent TCP connection from the TypeScript
 server to the simulator on `127.0.0.1:5001`. TCP provides ordered, reliable
 delivery. The server retains unacknowledged commands and resends them after a
 connection is restored.
@@ -8,8 +8,8 @@ connection is restored.
 Each record is UTF-8 text terminated by `\n`, with tab-separated fields:
 
 ```text
-COMMAND <id> <fault> <enabled>
-ACK     <id> <fault> <enabled>
+COMMAND <id> <control> <enabled>
+ACK     <id> <control> <enabled>
 ```
 
 On the wire, spaces shown above are tab characters. `enabled` is `0` or `1`.
@@ -23,7 +23,19 @@ Supported faults:
 | `sensor_noise` | `0x2` | Adds deterministic noise to measured altitude and velocity while preserving truth state |
 | `packet_loss` | `0x4` | Omits every tenth telemetry transmission |
 
-The browser sends a JSON command with the same ID, fault, enabled state, and an
+The browser sends a JSON command with the same ID, control, enabled state, and an
 issue timestamp over WebSocket. The streaming server validates it, translates
 it to the TCP record, and broadcasts the simulator acknowledgement back to all
 browser clients.
+
+Supported mission operations:
+
+| Control | Effect |
+|---|---|
+| `pause` | Freezes or resumes simulation integration without disconnecting control |
+| `abort` | On enable, cuts off powered ascent and transitions to recoverable coast |
+| `fts` | On enable, ends the simulated flight in the `TERMINATED` phase |
+
+`abort` and `fts` are momentary commands; their `enabled = 1` request is
+acknowledged but not retained as a toggle. FTS is simulation-only and is not a
+model of real safety hardware or operational rules.

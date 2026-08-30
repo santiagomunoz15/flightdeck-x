@@ -135,11 +135,40 @@ void test_thruster_loss_reduces_acceleration() {
           "powered guidance did not produce northward motion");
 }
 
+void test_abort_cuts_off_ascent_for_recovery() {
+  FlightSimulation simulation;
+  for (int step = 0; step < 500; ++step) simulation.step();
+  require(simulation.state().phase == MissionPhase::powered_ascent,
+          "test did not reach powered ascent");
+  simulation.request_abort();
+  require(simulation.state().phase == MissionPhase::coast,
+          "abort did not transition powered ascent to coast");
+  simulation.step();
+  require(simulation.state().thrust_n == 0.0,
+          "abort did not cut off thrust");
+}
+
+void test_termination_freezes_simulation() {
+  FlightSimulation simulation;
+  for (int step = 0; step < 500; ++step) simulation.step();
+  const double termination_time = simulation.state().simulation_time_s;
+  simulation.terminate();
+  simulation.step();
+  require(simulation.state().phase == MissionPhase::terminated,
+          "termination phase was not retained");
+  require(simulation.state().simulation_time_s == termination_time,
+          "terminated simulation continued advancing");
+  require(simulation.state().thrust_n == 0.0,
+          "termination did not remove thrust");
+}
+
 }  // namespace
 
 int main() {
   test_prelaunch_is_stationary();
   test_complete_flight_is_deterministic();
   test_thruster_loss_reduces_acceleration();
+  test_abort_cuts_off_ascent_for_recovery();
+  test_termination_freezes_simulation();
   std::cout << "All flight simulation tests passed\n";
 }

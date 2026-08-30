@@ -23,6 +23,9 @@ class ControlServer {
   [[nodiscard]] std::uint32_t fault_flags() const noexcept {
     return fault_flags_.load(std::memory_order_acquire);
   }
+  [[nodiscard]] bool paused() const noexcept { return paused_.load(std::memory_order_acquire); }
+  [[nodiscard]] bool consume_abort_request() noexcept { return abort_requested_.exchange(false, std::memory_order_acq_rel); }
+  [[nodiscard]] bool consume_fts_request() noexcept { return fts_requested_.exchange(false, std::memory_order_acq_rel); }
   [[nodiscard]] const std::string& error_message() const noexcept { return error_message_; }
 
  private:
@@ -35,6 +38,9 @@ class ControlServer {
   std::string error_message_;
   std::atomic<bool> running_{false};
   std::atomic<std::uint32_t> fault_flags_{0};
+  std::atomic<bool> paused_{false};
+  std::atomic<bool> abort_requested_{false};
+  std::atomic<bool> fts_requested_{false};
   std::thread worker_;
 };
 

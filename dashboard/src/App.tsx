@@ -99,10 +99,12 @@ export default function App() {
   const velocityResidual = sample ? sample.velocityMps[2] - sample.truthVelocityMps[2] : undefined;
   const landingError = sample ? Math.hypot(1000 - sample.positionM[0], 200 - sample.positionM[1]) : undefined;
   const packetAge = telemetry.lastPacketAt ? Math.max(0, Date.now() - telemetry.lastPacketAt) : undefined;
-  const nominal = telemetry.status === "connected" && (sample?.faultFlags ?? 0) === 0;
+  const terminated = sample?.missionPhase === "TERMINATED";
+  const nominal = telemetry.status === "connected" && !terminated && (sample?.faultFlags ?? 0) === 0;
   const healthText = telemetry.status !== "connected"
     ? "CHECK TELEMETRY LINK"
-    : (sample?.faultFlags ?? 0) !== 0 ? "FAULT CONDITION ACTIVE" : "ALL SYSTEMS NOMINAL";
+    : terminated ? "SIMULATED FLIGHT TERMINATED"
+      : (sample?.faultFlags ?? 0) !== 0 ? "FAULT CONDITION ACTIVE" : "ALL SYSTEMS NOMINAL";
   const trajectory = useMemo(
     () => chartSamples(telemetry.samples, 500).map((item) => item.positionM),
     [telemetry.samples],
@@ -159,16 +161,23 @@ export default function App() {
             <div className="fault-list">
               {FAULTS.map((fault) => {
                 const active = ((sample?.faultFlags ?? 0) & fault.mask) !== 0;
-                const pending = telemetry.commandState?.status === "pending" && telemetry.commandState.fault === fault.type;
+                const pending = telemetry.commandState?.status === "pending" && telemetry.commandState.control === fault.type;
                 return (
-                  <button key={fault.type} className={`fault-control ${active ? "active" : ""}`} disabled={!telemetry.controlConnected || pending} onClick={() => telemetry.sendFaultCommand(fault.type, !active)}>
+                  <button key={fault.type} className={`fault-control ${active ? "active" : ""}`} disabled={!telemetry.controlConnected || pending} onClick={() => telemetry.sendControlCommand(fault.type, !active)}>
                     <i /><span><strong>{fault.label}</strong><small>{fault.detail}</small></span><b>{pending ? "SENDING" : active ? "ACTIVE" : "ARM"}</b>
                   </button>
                 );
               })}
             </div>
+            <div className="operation-controls">
+              <button className={telemetry.paused ? "active" : ""} disabled={!telemetry.controlConnected} onClick={() => telemetry.sendControlCommand("pause", !telemetry.paused)}>
+                {telemetry.paused ? "RESUME" : "PAUSE"}
+              </button>
+              <button disabled={!telemetry.controlConnected} onClick={() => telemetry.sendControlCommand("abort", true)}>ABORT / RECOVER</button>
+              <button className="fts-control" disabled={!telemetry.controlConnected} onClick={() => window.confirm("Terminate this simulated flight? This is a simulation-only FTS command.") && telemetry.sendControlCommand("fts", true)}>SIM FTS</button>
+            </div>
             <div className={`command-state ${telemetry.commandState?.status ?? "idle"}`}>
-              {telemetry.commandState ? `${telemetry.commandState.status.toUpperCase()} / ${telemetry.commandState.fault.replace("_", " ").toUpperCase()}${telemetry.commandState.message ? ` / ${telemetry.commandState.message}` : ""}` : "AWAITING OPERATOR COMMAND"}
+              {telemetry.commandState ? `${telemetry.commandState.status.toUpperCase()} / ${telemetry.commandState.control.replace("_", " ").toUpperCase()}${telemetry.commandState.message ? ` / ${telemetry.commandState.message}` : ""}` : "AWAITING OPERATOR COMMAND"}
             </div>
           </section>
         </div>
