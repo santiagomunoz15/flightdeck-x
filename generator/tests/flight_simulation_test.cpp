@@ -135,32 +135,26 @@ void test_thruster_loss_reduces_acceleration() {
           "powered guidance did not produce northward motion");
 }
 
-void test_abort_cuts_off_ascent_for_recovery() {
+void test_control_surface_commands_follow_flight_phase() {
   FlightSimulation simulation;
-  for (int step = 0; step < 500; ++step) simulation.step();
-  require(simulation.state().phase == MissionPhase::powered_ascent,
-          "test did not reach powered ascent");
-  simulation.request_abort();
-  require(simulation.state().phase == MissionPhase::coast,
-          "abort did not transition powered ascent to coast");
-  simulation.step();
-  require(simulation.state().thrust_n == 0.0,
-          "abort did not cut off thrust");
+  double maximum_gimbal_deg = 0.0;
+  double maximum_grid_fin_deg = 0.0;
+  for (int step = 0; step < 30'000 && simulation.state().phase != MissionPhase::landed; ++step) {
+    simulation.step();
+    const auto& state = simulation.state();
+    maximum_gimbal_deg = std::max(maximum_gimbal_deg,
+        std::hypot(state.gimbal_command_deg[0], state.gimbal_command_deg[1]));
+    maximum_grid_fin_deg = std::max(maximum_grid_fin_deg,
+        std::hypot(state.grid_fin_command_deg[0], state.grid_fin_command_deg[1]));
+    if (state.phase == MissionPhase::coast) {
+      require(state.gimbal_command_deg == std::array<double, 2>{0.0, 0.0},
+              "gimbal command remained active during coast");
+    }
+  }
+  require(maximum_gimbal_deg > 0.1, "gimbal telemetry never became active");
+  require(maximum_grid_fin_deg > 0.1, "grid-fin telemetry never became active");
 }
 
-void test_termination_freezes_simulation() {
-  FlightSimulation simulation;
-  for (int step = 0; step < 500; ++step) simulation.step();
-  const double termination_time = simulation.state().simulation_time_s;
-  simulation.terminate();
-  simulation.step();
-  require(simulation.state().phase == MissionPhase::terminated,
-          "termination phase was not retained");
-  require(simulation.state().simulation_time_s == termination_time,
-          "terminated simulation continued advancing");
-  require(simulation.state().thrust_n == 0.0,
-          "termination did not remove thrust");
-}
 
 }  // namespace
 
@@ -168,7 +162,6 @@ int main() {
   test_prelaunch_is_stationary();
   test_complete_flight_is_deterministic();
   test_thruster_loss_reduces_acceleration();
-  test_abort_cuts_off_ascent_for_recovery();
-  test_termination_freezes_simulation();
+  test_control_surface_commands_follow_flight_phase();
   std::cout << "All flight simulation tests passed\n";
 }

@@ -6,6 +6,11 @@
 
 namespace flightdeck::simulation {
 
+namespace {
+constexpr double kRadiansToDegrees = 180.0 / 3.14159265358979323846;
+constexpr double kMaximumGridFinDeflectionDeg = 20.0;
+}
+
 std::string_view to_string(MissionPhase phase) noexcept {
   switch (phase) {
     case MissionPhase::prelaunch: return "PRELAUNCH";
@@ -14,7 +19,6 @@ std::string_view to_string(MissionPhase phase) noexcept {
     case MissionPhase::descent: return "DESCENT";
     case MissionPhase::landing_burn: return "LANDING_BURN";
     case MissionPhase::landed: return "LANDED";
-    case MissionPhase::terminated: return "TERMINATED";
   }
   return "UNKNOWN";
 }
@@ -23,22 +27,15 @@ FlightSimulation::FlightSimulation(FlightConfig config) : config_(config) {
   state_.mass_kg = config_.initial_mass_kg;
 }
 
-void FlightSimulation::request_abort() noexcept {
-  if (state_.phase == MissionPhase::prelaunch) transition_to(MissionPhase::landed);
-  else if (state_.phase == MissionPhase::powered_ascent) transition_to(MissionPhase::coast);
-}
-
-void FlightSimulation::terminate() noexcept {
-  state_.thrust_n = 0.0;
-  state_.acceleration_mps2 = 0.0;
-  state_.horizontal_acceleration_mps2 = 0.0;
-  state_.crossrange_acceleration_mps2 = 0.0;
-  transition_to(MissionPhase::terminated);
-}
-
 void FlightSimulation::transition_to(MissionPhase next) noexcept {
   state_.phase = next;
   state_.phase_time_s = 0.0;
+  if (next != MissionPhase::powered_ascent && next != MissionPhase::landing_burn) {
+    state_.gimbal_command_deg = {0.0, 0.0};
+  }
+  if (next != MissionPhase::descent) {
+    state_.grid_fin_command_deg = {0.0, 0.0};
+  }
 }
 
 bool FlightSimulation::should_start_landing_burn() const noexcept {
@@ -87,7 +84,7 @@ void FlightSimulation::update_orientation(double thrust_east_n,
 
 void FlightSimulation::step(double dt_s) noexcept {
   if (!(dt_s > 0.0) || !std::isfinite(dt_s) ||
-      state_.phase == MissionPhase::landed || state_.phase == MissionPhase::terminated) {
+      state_.phase == MissionPhase::landed) {
     return;
   }
 
@@ -96,6 +93,8 @@ void FlightSimulation::step(double dt_s) noexcept {
   state_.thrust_n = 0.0;
   state_.horizontal_acceleration_mps2 = 0.0;
   state_.crossrange_acceleration_mps2 = 0.0;
+  state_.gimbal_command_deg = {0.0, 0.0};
+  state_.grid_fin_command_deg = {0.0, 0.0};
 
   switch (state_.phase) {
     case MissionPhase::prelaunch:
@@ -119,6 +118,9 @@ void FlightSimulation::step(double dt_s) noexcept {
       const double thrust_up_n = std::sqrt(std::max(
           0.0, state_.thrust_n * state_.thrust_n -
               thrust_east_n * thrust_east_n - thrust_north_n * thrust_north_n));
+      state_.gimbal_command_deg = {
+          std::atan2(thrust_east_n, thrust_up_n) * kRadiansToDegrees,
+          std::atan2(thrust_north_n, thrust_up_n) * kRadiansToDegrees};
       state_.horizontal_acceleration_mps2 = thrust_east_n / state_.mass_kg;
       state_.crossrange_acceleration_mps2 = thrust_north_n / state_.mass_kg;
       state_.acceleration_mps2 = thrust_up_n / state_.mass_kg - config_.gravity_mps2;
@@ -158,6 +160,11 @@ void FlightSimulation::step(double dt_s) noexcept {
               state_.crossrange_velocity_mps * 0.018,
           -config_.maximum_grid_fin_acceleration_mps2,
           config_.maximum_grid_fin_acceleration_mps2);
+      state_.grid_fin_command_deg = {
+          state_.horizontal_acceleration_mps2 /
+              config_.maximum_grid_fin_acceleration_mps2 * kMaximumGridFinDeflectionDeg,
+          state_.crossrange_acceleration_mps2 /
+              config_.maximum_grid_fin_acceleration_mps2 * kMaximumGridFinDeflectionDeg};
       state_.horizontal_velocity_mps += state_.horizontal_acceleration_mps2 * dt_s;
       state_.crossrange_velocity_mps += state_.crossrange_acceleration_mps2 * dt_s;
       state_.velocity_mps += state_.acceleration_mps2 * dt_s;
@@ -195,6 +202,9 @@ void FlightSimulation::step(double dt_s) noexcept {
         thrust_north_n *= scale;
         thrust_up_n *= scale;
       }
+      state_.gimbal_command_deg = {
+          std::atan2(thrust_east_n, thrust_up_n) * kRadiansToDegrees,
+          std::atan2(thrust_north_n, thrust_up_n) * kRadiansToDegrees};
       state_.thrust_n = std::hypot(
           std::hypot(thrust_east_n, thrust_north_n), thrust_up_n);
       state_.horizontal_acceleration_mps2 = thrust_east_n / state_.mass_kg;
@@ -221,7 +231,6 @@ void FlightSimulation::step(double dt_s) noexcept {
       break;
     }
     case MissionPhase::landed:
-    case MissionPhase::terminated:
       break;
   }
 

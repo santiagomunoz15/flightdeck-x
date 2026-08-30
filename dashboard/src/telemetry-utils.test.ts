@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { chartSamples, displaySamples, dynamicPressureKpa, speedMps, startsNewFlight } from "./telemetry-utils";
 import type { TelemetrySample } from "./types";
 
-const sample = (sequence: number): TelemetrySample => ({ sequence, timestampUs: sequence * 10_000, missionPhase: "COAST", positionM: [0, 0, 0], velocityMps: [3, 4, 0], orientationWxyz: [1, 0, 0, 0], thrustPercent: 0, chamberPressureMpa: 0, faultFlags: 0, truthPositionM: [0, 0, 0], truthVelocityMps: [3, 4, 0], serverReceivedAtMs: 0 });
+const sample = (sequence: number): TelemetrySample => ({ sequence, timestampUs: sequence * 10_000, missionPhase: "COAST", positionM: [0, 0, 0], velocityMps: [3, 4, 0], orientationWxyz: [1, 0, 0, 0], thrustPercent: 0, chamberPressureMpa: 0, gimbalCommandDeg: [0, 0], gridFinCommandDeg: [0, 0], faultFlags: 0, truthPositionM: [0, 0, 0], truthVelocityMps: [3, 4, 0], serverReceivedAtMs: 0 });
 
 describe("telemetry helpers", () => {
   it("calculates speed and sea-level dynamic pressure", () => {

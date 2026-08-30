@@ -28,6 +28,8 @@ Telemetry fixture() {
       .orientation_wxyz = {1.0F, 0.0F, 0.0F, 0.0F},
       .thrust_percent = 75.5F,
       .chamber_pressure_mpa = 9.25F,
+      .gimbal_command_deg = {1.5F, -0.75F},
+      .grid_fin_command_deg = {12.0F, -8.0F},
       .fault_flags = 0x00000005U,
       .truth_position_m = {1.25, -2.25, 3.75},
       .truth_velocity_mps = {4.25, 5.25, -6.25},
@@ -46,7 +48,7 @@ void test_known_prefix() {
   const auto bytes = flightdeck::protocol::serialize(fixture());
   constexpr std::array<std::byte, 18> expected{
       std::byte{0x46}, std::byte{0x44}, std::byte{0x58}, std::byte{0x31},
-      std::byte{0x00}, std::byte{0x01},
+      std::byte{0x00}, std::byte{0x02},
       std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04},
       std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04},
       std::byte{0x05}, std::byte{0x06}, std::byte{0x07}, std::byte{0x08},
@@ -85,7 +87,7 @@ void test_rejections() {
           "wrong magic was not rejected");
 
   auto bad_version = valid;
-  bad_version[5] = std::byte{2};
+  bad_version[5] = std::byte{3};
   require(flightdeck::protocol::deserialize(bad_version).error ==
               DecodeError::unsupported_version,
           "unknown version was not rejected");

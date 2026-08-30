@@ -27,7 +27,8 @@ function TelemetryChart({ samples, events }: { samples: TelemetrySample[]; event
   return (
     <div className="chart-wrap">
       <div className="panel-heading"><div><span>FLIGHT PROFILE</span><h2>Measured and truth telemetry</h2></div><div className="legend"><i className="altitude" />Measured <i className="truth" />Truth <i className="velocity" />Velocity</div></div>
-      <ResponsiveContainer width="100%" height={260}>
+      <div className="chart-plot">
+      <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 12, right: 16, left: 8, bottom: 0 }}>
           <CartesianGrid stroke="#547078" strokeOpacity={0.14} strokeWidth={0.75} horizontal={false} vertical />
           <CartesianGrid stroke="#6f888f" strokeOpacity={0.24} strokeWidth={0.75} horizontal vertical={false} />
@@ -58,6 +59,7 @@ function TelemetryChart({ samples, events }: { samples: TelemetrySample[]; event
           <Line yAxisId="vel" type="monotone" dataKey="velocity" stroke="#e96d42" dot={false} strokeWidth={1.6} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }
@@ -99,12 +101,10 @@ export default function App() {
   const velocityResidual = sample ? sample.velocityMps[2] - sample.truthVelocityMps[2] : undefined;
   const landingError = sample ? Math.hypot(1000 - sample.positionM[0], 200 - sample.positionM[1]) : undefined;
   const packetAge = telemetry.lastPacketAt ? Math.max(0, Date.now() - telemetry.lastPacketAt) : undefined;
-  const terminated = sample?.missionPhase === "TERMINATED";
-  const nominal = telemetry.status === "connected" && !terminated && (sample?.faultFlags ?? 0) === 0;
+  const nominal = telemetry.status === "connected" && (sample?.faultFlags ?? 0) === 0;
   const healthText = telemetry.status !== "connected"
     ? "CHECK TELEMETRY LINK"
-    : terminated ? "SIMULATED FLIGHT TERMINATED"
-      : (sample?.faultFlags ?? 0) !== 0 ? "FAULT CONDITION ACTIVE" : "ALL SYSTEMS NOMINAL";
+    : (sample?.faultFlags ?? 0) !== 0 ? "FAULT CONDITION ACTIVE" : "ALL SYSTEMS NOMINAL";
   const trajectory = useMemo(
     () => chartSamples(telemetry.samples, 500).map((item) => item.positionM),
     [telemetry.samples],
@@ -135,16 +135,20 @@ export default function App() {
             <Metric label="DYNAMIC PRESSURE" value={format(dynamicPressure, 2)} unit="KPA" />
           </div>
           <TelemetryChart samples={telemetry.samples} events={events} />
-          <EventLog events={events} />
+          <div className="mobile-event"><EventLog events={events} /></div>
         </div>
 
         <div className="right-column">
           <section className="attitude-panel panel">
             <div className="panel-heading"><div><span>GUIDANCE</span><h2>Vehicle attitude</h2></div><b>QUATERNION</b></div>
-            <RocketView orientation={sample?.orientationWxyz ?? IDENTITY} position={sample?.positionM ?? [0, 0, 0]} velocity={sample?.velocityMps ?? [0, 0, 0]} missionPhase={sample?.missionPhase ?? "PRELAUNCH"} trail={trajectory} thrustPercent={sample?.thrustPercent ?? 0} />
+            <RocketView orientation={sample?.orientationWxyz ?? IDENTITY} position={sample?.positionM ?? [0, 0, 0]} velocity={sample?.velocityMps ?? [0, 0, 0]} missionPhase={sample?.missionPhase ?? "PRELAUNCH"} trail={trajectory} thrustPercent={sample?.thrustPercent ?? 0} gimbalCommandDeg={sample?.gimbalCommandDeg ?? [0, 0]} gridFinCommandDeg={sample?.gridFinCommandDeg ?? [0, 0]} />
             <div className="quaternion-readout">{["W", "X", "Y", "Z"].map((label, index) => <div key={label}><span>{label}</span><strong>{format(sample?.orientationWxyz[index], 3)}</strong></div>)}</div>
           </section>
 
+        </div>
+      </section>
+
+      <section className="operations-grid">
           <section className="systems panel">
             <div className="panel-heading"><div><span>PROPULSION</span><h2>Engine health</h2></div><i className={nominal ? "health-dot" : "health-dot warn"} /></div>
             <div className="system-row"><span>CHAMBER PRESSURE</span><strong>{format(sample?.chamberPressureMpa, 2)} <small>MPA</small></strong></div>
@@ -154,6 +158,8 @@ export default function App() {
             <div className="system-row"><span>DOWNRANGE</span><strong>{format(sample?.positionM[0], 1)} <small>M</small></strong></div>
             <div className="system-row"><span>CROSSRANGE</span><strong>{format(sample?.positionM[1], 1)} <small>M</small></strong></div>
             <div className="system-row"><span>LANDING ERROR</span><strong>{format(landingError, 1)} <small>M</small></strong></div>
+            <div className="system-row"><span>GIMBAL EAST / NORTH</span><strong>{format(sample?.gimbalCommandDeg[0], 2)}° / {format(sample?.gimbalCommandDeg[1], 2)}°</strong></div>
+            <div className="system-row"><span>GRID FIN EAST / NORTH</span><strong>{format(sample?.gridFinCommandDeg[0], 1)}° / {format(sample?.gridFinCommandDeg[1], 1)}°</strong></div>
           </section>
 
           <section className="fault-panel panel">
@@ -161,26 +167,19 @@ export default function App() {
             <div className="fault-list">
               {FAULTS.map((fault) => {
                 const active = ((sample?.faultFlags ?? 0) & fault.mask) !== 0;
-                const pending = telemetry.commandState?.status === "pending" && telemetry.commandState.control === fault.type;
+                const pending = telemetry.commandState?.status === "pending" && telemetry.commandState.fault === fault.type;
                 return (
-                  <button key={fault.type} className={`fault-control ${active ? "active" : ""}`} disabled={!telemetry.controlConnected || pending} onClick={() => telemetry.sendControlCommand(fault.type, !active)}>
+                  <button key={fault.type} className={`fault-control ${active ? "active" : ""}`} disabled={!telemetry.controlConnected || pending} onClick={() => telemetry.sendFaultCommand(fault.type, !active)}>
                     <i /><span><strong>{fault.label}</strong><small>{fault.detail}</small></span><b>{pending ? "SENDING" : active ? "ACTIVE" : "ARM"}</b>
                   </button>
                 );
               })}
             </div>
-            <div className="operation-controls">
-              <button className={telemetry.paused ? "active" : ""} disabled={!telemetry.controlConnected} onClick={() => telemetry.sendControlCommand("pause", !telemetry.paused)}>
-                {telemetry.paused ? "RESUME" : "PAUSE"}
-              </button>
-              <button disabled={!telemetry.controlConnected} onClick={() => telemetry.sendControlCommand("abort", true)}>ABORT / RECOVER</button>
-              <button className="fts-control" disabled={!telemetry.controlConnected} onClick={() => window.confirm("Terminate this simulated flight? This is a simulation-only FTS command.") && telemetry.sendControlCommand("fts", true)}>SIM FTS</button>
-            </div>
             <div className={`command-state ${telemetry.commandState?.status ?? "idle"}`}>
-              {telemetry.commandState ? `${telemetry.commandState.status.toUpperCase()} / ${telemetry.commandState.control.replace("_", " ").toUpperCase()}${telemetry.commandState.message ? ` / ${telemetry.commandState.message}` : ""}` : "AWAITING OPERATOR COMMAND"}
+              {telemetry.commandState ? `${telemetry.commandState.status.toUpperCase()} / ${telemetry.commandState.fault.replace("_", " ").toUpperCase()}${telemetry.commandState.message ? ` / ${telemetry.commandState.message}` : ""}` : "AWAITING OPERATOR COMMAND"}
             </div>
           </section>
-        </div>
+          <div className="desktop-event"><EventLog events={events} /></div>
       </section>
 
       <footer>

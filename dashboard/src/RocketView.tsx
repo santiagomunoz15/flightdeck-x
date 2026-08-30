@@ -14,8 +14,7 @@ const LANDING_TARGET_EAST_M = 1000;
 const LANDING_TARGET_NORTH_M = 200;
 const MAX_TRAIL_POINTS = 512;
 const LEG_DEPLOYMENT_ALTITUDE_M = 75;
-const GRID_FIN_STEERING_LIMIT = Math.PI / 9;
-const ENGINE_GIMBAL_LIMIT = Math.PI / 36;
+const DEGREES_TO_RADIANS = Math.PI / 180;
 
 function scenePosition(position: Position): Vector3 {
   return new Vector3(position[0], Math.max(position[2], GROUND_Y), -position[1]);
@@ -59,7 +58,7 @@ function FallbackRocket() {
   );
 }
 
-function FlightModel({ thrustPercent, position, velocity, missionPhase }: { thrustPercent: number; position: Position; velocity: Position; missionPhase: MissionPhase }) {
+function FlightModel({ thrustPercent, position, velocity, missionPhase, gimbalCommandDeg, gridFinCommandDeg }: { thrustPercent: number; position: Position; velocity: Position; missionPhase: MissionPhase; gimbalCommandDeg: [number, number]; gridFinCommandDeg: [number, number] }) {
   const { scene, animations } = useLoader(GLTFLoader, "/models/Falcon9.glb");
   const model = useMemo(() => scene.clone(true), [scene]);
   const mixer = useMemo(() => new AnimationMixer(model), [model]);
@@ -198,20 +197,16 @@ function FlightModel({ thrustPercent, position, velocity, missionPhase }: { thru
     }
     mixer.update(Math.min(delta, 0.1));
 
-    const eastControl = Math.max(-GRID_FIN_STEERING_LIMIT, Math.min(
-      GRID_FIN_STEERING_LIMIT, (1000 - position[0]) * 0.0004 - velocity[0] * 0.02));
-    const northControl = Math.max(-GRID_FIN_STEERING_LIMIT, Math.min(
-      GRID_FIN_STEERING_LIMIT, (200 - position[1]) * 0.0004 - velocity[1] * 0.02));
+    const eastControl = gridFinCommandDeg[0] * DEGREES_TO_RADIANS;
+    const northControl = gridFinCommandDeg[1] * DEGREES_TO_RADIANS;
     for (const { pivot, axis } of gridFinPivots) {
       const angle = eastControl * axis.z - northControl * axis.x;
       pivot.quaternion.setFromAxisAngle(axis, gridFinsDeployed.current ? angle : 0);
     }
 
     if (engineGimbal) {
-      const eastGimbal = Math.max(-ENGINE_GIMBAL_LIMIT, Math.min(
-        ENGINE_GIMBAL_LIMIT, (1000 - position[0]) * 0.00012 - velocity[0] * 0.004));
-      const northGimbal = Math.max(-ENGINE_GIMBAL_LIMIT, Math.min(
-        ENGINE_GIMBAL_LIMIT, (200 - position[1]) * 0.00012 - velocity[1] * 0.004));
+      const eastGimbal = gimbalCommandDeg[0] * DEGREES_TO_RADIANS;
+      const northGimbal = gimbalCommandDeg[1] * DEGREES_TO_RADIANS;
       const gimbalActive = thrustPercent > 0.5;
       engineGimbal.rotation.set(gimbalActive ? northGimbal : 0, 0, gimbalActive ? -eastGimbal : 0);
     }
@@ -243,7 +238,7 @@ function FlightModel({ thrustPercent, position, velocity, missionPhase }: { thru
   );
 }
 
-function Rocket({ orientation, position, velocity, missionPhase, thrustPercent }: { orientation: [number, number, number, number]; position: Position; velocity: Position; missionPhase: MissionPhase; thrustPercent: number }) {
+function Rocket({ orientation, position, velocity, missionPhase, thrustPercent, gimbalCommandDeg, gridFinCommandDeg }: { orientation: [number, number, number, number]; position: Position; velocity: Position; missionPhase: MissionPhase; thrustPercent: number; gimbalCommandDeg: [number, number]; gridFinCommandDeg: [number, number] }) {
   const group = useRef<Group>(null);
   const targetPosition = useMemo(() => new Vector3(), []);
   const targetOrientation = useMemo(() => new Quaternion(), []);
@@ -269,7 +264,7 @@ function Rocket({ orientation, position, velocity, missionPhase, thrustPercent }
   return (
     <group ref={group}>
       <Suspense fallback={<FallbackRocket />}>
-        <FlightModel thrustPercent={thrustPercent} position={position} velocity={velocity} missionPhase={missionPhase} />
+        <FlightModel thrustPercent={thrustPercent} position={position} velocity={velocity} missionPhase={missionPhase} gimbalCommandDeg={gimbalCommandDeg} gridFinCommandDeg={gridFinCommandDeg} />
       </Suspense>
     </group>
   );
@@ -312,7 +307,7 @@ function FlightCamera({ position }: { position: Position }) {
   return null;
 }
 
-export function RocketView({ orientation, position, velocity, missionPhase, trail, thrustPercent }: { orientation: [number, number, number, number]; position: Position; velocity: Position; missionPhase: MissionPhase; trail: Position[]; thrustPercent: number }) {
+export function RocketView({ orientation, position, velocity, missionPhase, trail, thrustPercent, gimbalCommandDeg, gridFinCommandDeg }: { orientation: [number, number, number, number]; position: Position; velocity: Position; missionPhase: MissionPhase; trail: Position[]; thrustPercent: number; gimbalCommandDeg: [number, number]; gridFinCommandDeg: [number, number] }) {
   return (
     <div className="rocket-view" aria-label="Quaternion-driven rocket orientation">
       <Canvas camera={{ position: [90, 45, 130], fov: CAMERA_FOV_DEGREES, near: 0.1, far: 20000 }} dpr={[1, 1.5]}>
@@ -320,7 +315,7 @@ export function RocketView({ orientation, position, velocity, missionPhase, trai
         <ambientLight intensity={1.2} /><directionalLight position={[4, 6, 5]} intensity={3.5} color="#e8f6ff" />
         <pointLight position={[-3, -2, 3]} intensity={thrustPercent > 0 ? 5 : 1.5} color="#e86c3e" />
         <TrajectoryTrail positions={trail} />
-        <Rocket orientation={orientation} position={position} velocity={velocity} missionPhase={missionPhase} thrustPercent={thrustPercent} />
+        <Rocket orientation={orientation} position={position} velocity={velocity} missionPhase={missionPhase} thrustPercent={thrustPercent} gimbalCommandDeg={gimbalCommandDeg} gridFinCommandDeg={gridFinCommandDeg} />
         <FlightCamera position={position} />
         <mesh position={[LANDING_TARGET_EAST_M, 0.6, -LANDING_TARGET_NORTH_M]}>
           <cylinderGeometry args={[24, 24, 1.2, 32]} />

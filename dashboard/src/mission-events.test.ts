@@ -3,7 +3,7 @@ import { deriveMissionEvents } from "./mission-events";
 import type { MissionPhase, TelemetrySample } from "./types";
 
 function sample(sequence: number, missionPhase: MissionPhase, faultFlags = 0): TelemetrySample {
-  return { sequence, timestampUs: sequence * 10_000, missionPhase, positionM: [0, 0, 0], velocityMps: [0, 0, 0], orientationWxyz: [1, 0, 0, 0], thrustPercent: 0, chamberPressureMpa: 0, faultFlags, truthPositionM: [0, 0, 0], truthVelocityMps: [0, 0, 0], serverReceivedAtMs: 0 };
+  return { sequence, timestampUs: sequence * 10_000, missionPhase, positionM: [0, 0, 0], velocityMps: [0, 0, 0], orientationWxyz: [1, 0, 0, 0], thrustPercent: 0, chamberPressureMpa: 0, gimbalCommandDeg: [0, 0], gridFinCommandDeg: [0, 0], faultFlags, truthPositionM: [0, 0, 0], truthVelocityMps: [0, 0, 0], serverReceivedAtMs: 0 };
 }
 
 describe("deriveMissionEvents", () => {
@@ -22,9 +22,5 @@ describe("deriveMissionEvents", () => {
   it("classifies touchdown from the final truth descent rate", () => {
     const hard = { ...sample(99, "LANDING_BURN"), truthVelocityMps: [0, 0, -6] as [number, number, number] };
     expect(deriveMissionEvents([hard, sample(100, "LANDED")]).at(-1)).toMatchObject({ label: "HARD LANDING", severity: "warning" });
-  });
-  it("records simulated flight termination as critical", () => {
-    expect(deriveMissionEvents([sample(10, "POWERED_ASCENT"), sample(11, "TERMINATED")]).at(-1))
-      .toMatchObject({ label: "SIMULATED FLIGHT TERMINATED", severity: "critical" });
   });
 });

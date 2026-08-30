@@ -2,9 +2,9 @@ import { crc32 } from "./crc32.js";
 import { missionPhases, type TelemetrySample } from "./types.js";
 
 export const TELEMETRY_MAGIC = 0x46445831;
-export const TELEMETRY_VERSION = 1;
-export const TELEMETRY_PACKET_SIZE = 147;
-export const CRC_OFFSET = 143;
+export const TELEMETRY_VERSION = 2;
+export const TELEMETRY_PACKET_SIZE = 163;
+export const CRC_OFFSET = 159;
 
 export type DecodeError = "wrong_size" | "wrong_magic" | "unsupported_version" | "checksum_mismatch" | "invalid_phase" | "invalid_number";
 export type DecodeResult = { ok: true; sample: TelemetrySample } | { ok: false; error: DecodeError };
@@ -24,10 +24,12 @@ export function decodeTelemetry(packet: Uint8Array, receivedAtMs = Date.now()): 
     velocityMps: [view.getFloat64(43, false), view.getFloat64(51, false), view.getFloat64(59, false)],
     orientationWxyz: [view.getFloat32(67, false), view.getFloat32(71, false), view.getFloat32(75, false), view.getFloat32(79, false)],
     thrustPercent: view.getFloat32(83, false), chamberPressureMpa: view.getFloat32(87, false),
-    faultFlags: view.getUint32(91, false), serverReceivedAtMs: receivedAtMs,
-    truthPositionM: [view.getFloat64(95, false), view.getFloat64(103, false), view.getFloat64(111, false)],
-    truthVelocityMps: [view.getFloat64(119, false), view.getFloat64(127, false), view.getFloat64(135, false)],
+    gimbalCommandDeg: [view.getFloat32(91, false), view.getFloat32(95, false)],
+    gridFinCommandDeg: [view.getFloat32(99, false), view.getFloat32(103, false)],
+    faultFlags: view.getUint32(107, false), serverReceivedAtMs: receivedAtMs,
+    truthPositionM: [view.getFloat64(111, false), view.getFloat64(119, false), view.getFloat64(127, false)],
+    truthVelocityMps: [view.getFloat64(135, false), view.getFloat64(143, false), view.getFloat64(151, false)],
   };
-  const numbers = [...sample.positionM, ...sample.velocityMps, ...sample.orientationWxyz, ...sample.truthPositionM, ...sample.truthVelocityMps, sample.thrustPercent, sample.chamberPressureMpa];
+  const numbers = [...sample.positionM, ...sample.velocityMps, ...sample.orientationWxyz, ...sample.gimbalCommandDeg, ...sample.gridFinCommandDeg, ...sample.truthPositionM, ...sample.truthVelocityMps, sample.thrustPercent, sample.chamberPressureMpa];
   return numbers.every(Number.isFinite) ? { ok: true, sample } : { ok: false, error: "invalid_number" };
 }

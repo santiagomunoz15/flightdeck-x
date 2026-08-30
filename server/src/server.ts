@@ -1,10 +1,10 @@
 import { createSocket, type Socket as UdpSocket } from "node:dgram";
 import { WebSocket, WebSocketServer } from "ws";
 import { CircularBuffer } from "./circular-buffer.js";
-import { isControl, SimulatorControlClient } from "./control-client.js";
+import { isFault, SimulatorControlClient } from "./control-client.js";
 import { SequenceTracker } from "./sequence-tracker.js";
 import { decodeTelemetry } from "./telemetry.js";
-import type { ControlCommand, ServerMessage, StreamMetrics, TelemetrySample } from "./types.js";
+import type { FaultCommand, ServerMessage, StreamMetrics, TelemetrySample } from "./types.js";
 
 export interface ServerOptions { udpHost: string; udpPort: number; wsHost: string; wsPort: number; historyCapacity: number; controlHost: string; controlPort: number; }
 
@@ -20,7 +20,7 @@ export class TelemetryServer {
     this.#history = new CircularBuffer(options.historyCapacity);
     this.#control = new SimulatorControlClient(options.controlHost, options.controlPort, {
       onStatus: (connected) => this.#broadcast({ type: "control_status", connected }),
-      onAcknowledgement: (id, control, enabled) => this.#broadcast({ type: "command_ack", id, control, enabled, acknowledgedAtMs: Date.now() }),
+      onAcknowledgement: (id, fault, enabled) => this.#broadcast({ type: "command_ack", id, fault, enabled, acknowledgedAtMs: Date.now() }),
     });
   }
 
@@ -84,7 +84,7 @@ export class TelemetryServer {
   #acceptClientMessage(client: WebSocket, encoded: string): void {
     let value: unknown;
     try { value = JSON.parse(encoded); } catch { this.#send(client, { type: "command_error", message: "Malformed JSON" }); return; }
-    if (!isControlCommand(value)) {
+    if (!isFaultCommand(value)) {
       this.#send(client, { type: "command_error", message: "Invalid command" });
       return;
     }
@@ -100,10 +100,10 @@ export class TelemetryServer {
   }
 }
 
-function isControlCommand(value: unknown): value is ControlCommand {
+function isFaultCommand(value: unknown): value is FaultCommand {
   if (typeof value !== "object" || value === null) return false;
-  const command = value as Partial<ControlCommand>;
+  const command = value as Partial<FaultCommand>;
   return command.type === "command" && typeof command.id === "string" &&
-    /^[A-Za-z0-9-]{1,64}$/.test(command.id) && isControl(command.control) &&
+    /^[A-Za-z0-9-]{1,64}$/.test(command.id) && isFault(command.fault) &&
     typeof command.enabled === "boolean" && typeof command.issuedAtMs === "number";
 }

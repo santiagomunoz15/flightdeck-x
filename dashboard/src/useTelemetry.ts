@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { displaySamples, shouldRetainSample, startsNewFlight } from "./telemetry-utils";
-import type { CommandState, ConnectionStatus, ControlType, ServerMessage, StreamMetrics, TelemetrySample } from "./types";
+import type { CommandState, ConnectionStatus, FaultType, ServerMessage, StreamMetrics, TelemetrySample } from "./types";
 
 const EMPTY_METRICS: StreamMetrics = { received: 0, valid: 0, rejected: 0, lost: 0, reordered: 0 };
 const MAX_CLIENT_SAMPLES = 2000;
@@ -13,7 +13,6 @@ export function useTelemetry(url: string) {
   const [lastPacketAt, setLastPacketAt] = useState<number>();
   const [controlConnected, setControlConnected] = useState(false);
   const [commandState, setCommandState] = useState<CommandState>();
-  const [paused, setPaused] = useState(false);
   const reconnectAttempt = useRef(0);
   const socketRef = useRef<WebSocket | undefined>(undefined);
 
@@ -65,14 +64,13 @@ export function useTelemetry(url: string) {
             return;
           }
           if (message.type === "command_ack") {
-            setCommandState({ id: message.id, control: message.control, enabled: message.enabled, status: "acknowledged" });
-            if (message.control === "pause") setPaused(message.enabled);
+            setCommandState({ id: message.id, fault: message.fault, enabled: message.enabled, status: "acknowledged" });
             return;
           }
           if (message.type === "command_error") {
             setCommandState((current) => ({
               id: message.id ?? current?.id ?? "unknown",
-              control: current?.control ?? "thruster_loss",
+              fault: current?.fault ?? "thruster_loss",
               enabled: current?.enabled ?? false,
               status: "failed",
               message: message.message,
@@ -125,14 +123,14 @@ export function useTelemetry(url: string) {
     };
   }, [url]);
 
-  const sendControlCommand = (control: ControlType, enabled: boolean) => {
+  const sendFaultCommand = (fault: FaultType, enabled: boolean) => {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN || !controlConnected) return false;
     const id = crypto.randomUUID();
-    socket.send(JSON.stringify({ type: "command", id, control, enabled, issuedAtMs: Date.now() }));
-    setCommandState({ id, control, enabled, status: "pending" });
+    socket.send(JSON.stringify({ type: "command", id, fault, enabled, issuedAtMs: Date.now() }));
+    setCommandState({ id, fault, enabled, status: "pending" });
     return true;
   };
 
-  return { status, samples, latest: samples.at(-1), metrics, transportLatencyMs, lastPacketAt, controlConnected, commandState, paused, sendControlCommand };
+  return { status, samples, latest: samples.at(-1), metrics, transportLatencyMs, lastPacketAt, controlConnected, commandState, sendFaultCommand };
 }

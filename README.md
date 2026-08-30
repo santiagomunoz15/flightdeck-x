@@ -42,7 +42,7 @@ keyframed animations and live telemetry together:
 
 - Deterministic fixed-step C++ simulation at 100 Hz
 - Guided 3D hop with 2.4 km apogee and crossrange landing target
-- Versioned 147-byte, big-endian telemetry packets with sequence numbers and CRC32
+- Versioned 163-byte, big-endian telemetry packets with sequence numbers and CRC32
 - Bounded SPSC queue so network I/O cannot block the simulation loop
 - UDP telemetry with loss/reordering metrics and deliberate corruption testing
 - TypeScript packet validation, bounded history, and multi-client WebSocket fan-out
@@ -50,7 +50,7 @@ keyframed animations and live telemetry together:
 - Live altitude and speed charts, exact-time events, anomaly markers, and residuals
 - Quaternion-driven low-poly 3D vehicle, animated mechanisms, plume, trail, and camera
 - Acknowledged thrust-loss, sensor-noise, and packet-loss injection
-- Mission operations for pause/resume, recoverable abort, and simulated FTS
+- Simulator-sourced engine-gimbal and grid-fin command telemetry
 - Automated C++, TypeScript, socket integration, and production-build checks in CI
 
 ## Architecture
@@ -72,7 +72,7 @@ flowchart LR
 
   subgraph UI["React mission control"]
     DASH["Charts, metrics, events, 3D flight"]
-    OPS["Fault + mission controls"]
+    OPS["Fault-injection controls"]
   end
 
   TX -. "UDP / binary / 100 Hz" .-> VALIDATE
@@ -84,27 +84,12 @@ flowchart LR
 ```
 
 Telemetry uses UDP because freshness matters more than retransmitting a stale
-flight sample. Operator commands use TCP plus application-level command IDs,
+flight sample. Fault commands use TCP plus application-level command IDs,
 retry, and acknowledgement because commands must arrive reliably and in order.
 
 The simulator maintains separate truth and measured state. Sensor-noise faults
 alter measurements while leaving truth untouched, allowing the dashboard to
 plot residuals and expose the failure instead of merely changing a status light.
-
-## Mission operations
-
-The dashboard sends all controls through the same acknowledged path used for
-fault injection:
-
-| Control | Simulation behavior |
-|---|---|
-| Pause / resume | Freezes and resumes the fixed-step flight clock while the control link remains responsive |
-| Abort / recover | Cuts off powered ascent and transitions to coast so descent and landing logic can attempt recovery |
-| SIM FTS | Immediately removes thrust, records a distinct `TERMINATED` phase, and ends the simulated flight |
-
-`SIM FTS` is deliberately labeled and implemented as a simulation feature. It
-does not represent or claim to reproduce real flight-termination hardware,
-decision logic, safety procedures, or regulatory requirements.
 
 ## Technology stack
 
@@ -141,8 +126,8 @@ npm run demo
 
 Open `http://127.0.0.1:5173`. The relay receives simulator UDP packets on port
 5000, serves WebSocket clients on port 8080, and connects to the simulator's TCP
-control listener on port 5001. When a flight lands, aborts before launch, or is
-terminated, the dashboard and relay remain open so the final telemetry can be
+control listener on port 5001. When a flight lands, the dashboard and relay
+remain open so the final telemetry can be
 inspected. Stop the demo with `Ctrl-C`.
 
 The three processes can also be run separately:
@@ -185,7 +170,7 @@ large final commit.
 | v0.3 — Guided hop | The vertical profile became a guided 2D kilometer hop, then a full 3D flight to a crossrange pad | [`bf3f8a3`](https://github.com/santiagomunoz15/flightdeck-x/commit/bf3f8a3), [`13ef495`](https://github.com/santiagomunoz15/flightdeck-x/commit/13ef495) |
 | v0.4 — Custom vehicle | The original low-poly Blender vehicle gained a telemetry plume, real-scale camera, and automatic landing-leg deployment | [`fa0755a`](https://github.com/santiagomunoz15/flightdeck-x/commit/fa0755a), [`ba91618`](https://github.com/santiagomunoz15/flightdeck-x/commit/ba91618) |
 | v0.5 — Long-run stability | Browser samples and trajectory geometry were bounded, reducing post-fault-test tab memory to roughly 517 MB in manual measurement | [`b3cf6f1`](https://github.com/santiagomunoz15/flightdeck-x/commit/b3cf6f1) |
-| v0.6 — Active flight surfaces | Animated grid fins gained telemetry-driven steering, the center engine gained visual gimbal, and the website gained mission operations | [`a6ba82b`](https://github.com/santiagomunoz15/flightdeck-x/commit/a6ba82b) |
+| v0.6 — Active flight surfaces | Animated grid fins gained simulator-driven steering and the center engine gained visual gimbal with live command readouts | [`a6ba82b`](https://github.com/santiagomunoz15/flightdeck-x/commit/a6ba82b) |
 
 ## Engineering principles
 

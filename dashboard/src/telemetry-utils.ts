@@ -21,7 +21,7 @@ export function startsNewFlight(previous: TelemetrySample | undefined, current: 
 export function shouldRetainSample(previous: TelemetrySample | undefined, current: TelemetrySample, stride = 5): boolean {
   return !previous || current.sequence % stride === 0 ||
     current.missionPhase !== previous.missionPhase ||
-    current.faultFlags !== previous.faultFlags || current.missionPhase === "LANDED" || current.missionPhase === "TERMINATED";
+    current.faultFlags !== previous.faultFlags || current.missionPhase === "LANDED";
 }
 
 export function displaySamples(samples: TelemetrySample[], stride = 5): TelemetrySample[] {

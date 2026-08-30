@@ -32,7 +32,6 @@ std::string_view phase_name(flightdeck::protocol::MissionPhase phase) {
     case MissionPhase::descent: return "DESCENT";
     case MissionPhase::landing_burn: return "LANDING_BURN";
     case MissionPhase::landed: return "LANDED";
-    case MissionPhase::terminated: return "TERMINATED";
   }
   return "UNKNOWN";
 }

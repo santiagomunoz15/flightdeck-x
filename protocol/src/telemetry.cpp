@@ -70,6 +70,8 @@ TelemetryBytes serialize(const Telemetry& telemetry) noexcept {
   for (const float value : telemetry.orientation_wxyz) write_float(output, offset, value);
   write_float(output, offset, telemetry.thrust_percent);
   write_float(output, offset, telemetry.chamber_pressure_mpa);
+  for (const float value : telemetry.gimbal_command_deg) write_float(output, offset, value);
+  for (const float value : telemetry.grid_fin_command_deg) write_float(output, offset, value);
   write_unsigned(output, offset, telemetry.fault_flags);
   for (const double value : telemetry.truth_position_m) write_double(output, offset, value);
   for (const double value : telemetry.truth_velocity_mps) write_double(output, offset, value);
@@ -106,6 +108,8 @@ DecodeResult deserialize(std::span<const std::byte> bytes) noexcept {
   for (float& value : telemetry.orientation_wxyz) value = read_float(bytes, offset);
   telemetry.thrust_percent = read_float(bytes, offset);
   telemetry.chamber_pressure_mpa = read_float(bytes, offset);
+  for (float& value : telemetry.gimbal_command_deg) value = read_float(bytes, offset);
+  for (float& value : telemetry.grid_fin_command_deg) value = read_float(bytes, offset);
   telemetry.fault_flags = read_unsigned<std::uint32_t>(bytes, offset);
   for (double& value : telemetry.truth_position_m) value = read_double(bytes, offset);
   for (double& value : telemetry.truth_velocity_mps) value = read_double(bytes, offset);
