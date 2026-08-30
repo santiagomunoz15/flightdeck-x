@@ -32,9 +32,9 @@ function TelemetryChart({ samples, events }: { samples: TelemetrySample[]; event
         <LineChart data={data} margin={{ top: 12, right: 16, left: 8, bottom: 0 }}>
           <CartesianGrid stroke="#547078" strokeOpacity={0.14} strokeWidth={0.75} horizontal={false} vertical />
           <CartesianGrid stroke="#6f888f" strokeOpacity={0.24} strokeWidth={0.75} horizontal vertical={false} />
-          <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]} tickFormatter={(value: number) => value === 0 ? "0" : `${value.toFixed(1)}s`} stroke="#547078" tickLine={false} axisLine={false} />
-          <YAxis yAxisId="alt" tickFormatter={(value: number) => `${Math.round(value)}m`} stroke="#547078" tickLine={false} axisLine={false} width={78} />
-          <YAxis yAxisId="vel" orientation="right" tickFormatter={(value: number) => `${value.toFixed(1)}m/s`} stroke="#547078" tickLine={false} axisLine={false} width={76} />
+          <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]} tickFormatter={(value: number) => value === 0 ? "0" : `${value.toFixed(1)}s`} tick={{ fontSize: 9 }} stroke="#547078" tickLine={false} axisLine={false} />
+          <YAxis yAxisId="alt" tickFormatter={(value: number) => `${Math.round(value)}m`} tick={{ fontSize: 9 }} stroke="#547078" tickLine={false} axisLine={false} width={78} />
+          <YAxis yAxisId="vel" orientation="right" tickFormatter={(value: number) => `${value.toFixed(1)}m/s`} tick={{ fontSize: 9 }} stroke="#547078" tickLine={false} axisLine={false} width={76} />
           <Tooltip
             contentStyle={{ background: "#0d171c", border: "1px solid #29434b", borderRadius: 2 }}
             labelFormatter={(value) => `T+ ${Number(value).toFixed(3)} s`}
