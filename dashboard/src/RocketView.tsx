@@ -14,6 +14,8 @@ const LANDING_TARGET_EAST_M = 1000;
 const LANDING_TARGET_NORTH_M = 200;
 const MAX_TRAIL_POINTS = 512;
 const LEG_DEPLOYMENT_ALTITUDE_M = 75;
+const GRID_FIN_STEERING_LIMIT = Math.PI / 9;
+const ENGINE_GIMBAL_LIMIT = Math.PI / 36;
 
 function scenePosition(position: Position): Vector3 {
   return new Vector3(position[0], Math.max(position[2], GROUND_Y), -position[1]);
@@ -57,15 +59,19 @@ function FallbackRocket() {
   );
 }
 
-function FlightModel({ thrustPercent, altitude, verticalVelocity, missionPhase }: { thrustPercent: number; altitude: number; verticalVelocity: number; missionPhase: MissionPhase }) {
+function FlightModel({ thrustPercent, position, velocity, missionPhase }: { thrustPercent: number; position: Position; velocity: Position; missionPhase: MissionPhase }) {
   const { scene, animations } = useLoader(GLTFLoader, "/models/Falcon9.glb");
   const model = useMemo(() => scene.clone(true), [scene]);
   const mixer = useMemo(() => new AnimationMixer(model), [model]);
   const legActions = useMemo(() => animations
     .filter((clip) => clip.name.toLowerCase().includes("landing leg"))
     .map((clip) => mixer.clipAction(clip)), [animations, mixer]);
+  const gridFinActions = useMemo(() => animations
+    .filter((clip) => clip.tracks.some((track) => track.name.toLowerCase().includes("grid fin")))
+    .map((clip) => mixer.clipAction(clip)), [animations, mixer]);
   const legsDeployed = useRef(false);
-  const { modelOffset, plumes } = useMemo(() => {
+  const gridFinsDeployed = useRef(false);
+  const { modelOffset, plumes, gridFinPivots, engineGimbal } = useMemo(() => {
     const exhausts: Object3D[] = [];
     model.traverse((object) => {
       const normalizedName = object.name.replace(/[\s_-]/g, "").toLowerCase();
@@ -76,6 +82,34 @@ function FlightModel({ thrustPercent, altitude, verticalVelocity, missionPhase }
         exhausts.push(object);
       }
     });
+
+    const steeringPivots: Array<{ pivot: Object3D; axis: Vector3 }> = [];
+    for (const fin of [1, 2, 3, 4].map((number) => model.getObjectByName(`Grid Fin ${number}`))) {
+      if (!fin?.parent) continue;
+      const parent = fin.parent;
+      const pivot = new Object3D();
+      pivot.name = `${fin.name} Control`;
+      pivot.position.copy(fin.position);
+      const axis = new Vector3(fin.position.x, 0, fin.position.z).normalize();
+      parent.remove(fin);
+      parent.add(pivot);
+      pivot.add(fin);
+      fin.position.set(0, 0, 0);
+      steeringPivots.push({ pivot, axis });
+    }
+
+    let gimbalPivot: Object3D | undefined;
+    const engine = model.getObjectByName("InnerMerlinEngine");
+    if (engine?.parent) {
+      const parent = engine.parent;
+      gimbalPivot = new Object3D();
+      gimbalPivot.name = "EngineGimbalControl";
+      gimbalPivot.position.copy(engine.position);
+      parent.remove(engine);
+      parent.add(gimbalPivot);
+      gimbalPivot.add(engine);
+      engine.position.set(0, 0, 0);
+    }
 
     const detached = exhausts.flatMap((exhaust) => exhaust.parent ? [{ exhaust, parent: exhaust.parent }] : []);
     for (const { exhaust, parent } of detached) parent.remove(exhaust);
@@ -98,11 +132,13 @@ function FlightModel({ thrustPercent, altitude, verticalVelocity, missionPhase }
     return {
       modelOffset: new Vector3(-center.x, -bounds.min.y, -center.z),
       plumes: plumeObjects,
+      gridFinPivots: steeringPivots,
+      engineGimbal: gimbalPivot,
     };
   }, [model]);
 
   useEffect(() => {
-    for (const action of legActions) {
+    for (const action of [...legActions, ...gridFinActions]) {
       action.reset();
       action.setLoop(LoopOnce, 1);
       action.clampWhenFinished = true;
@@ -116,7 +152,7 @@ function FlightModel({ thrustPercent, altitude, verticalVelocity, missionPhase }
       // the second setup calls play(); stopping is sufficient for teardown.
       mixer.stopAllAction();
     };
-  }, [legActions, mixer, model]);
+  }, [gridFinActions, legActions, mixer, model]);
 
   useFrame(({ clock }, delta) => {
     if (missionPhase === "PRELAUNCH" && legsDeployed.current) {
@@ -128,7 +164,7 @@ function FlightModel({ thrustPercent, altitude, verticalVelocity, missionPhase }
       mixer.setTime(0);
       legsDeployed.current = false;
     } else if (!legsDeployed.current &&
-        ((verticalVelocity < 0 && altitude <= LEG_DEPLOYMENT_ALTITUDE_M) || missionPhase === "LANDED")) {
+        ((velocity[2] < 0 && position[2] <= LEG_DEPLOYMENT_ALTITUDE_M) || missionPhase === "LANDED")) {
       for (const action of legActions) {
         action.reset();
         action.paused = false;
@@ -140,7 +176,45 @@ function FlightModel({ thrustPercent, altitude, verticalVelocity, missionPhase }
       }
       legsDeployed.current = true;
     }
+    if (missionPhase === "PRELAUNCH" && gridFinsDeployed.current) {
+      for (const action of gridFinActions) {
+        action.reset();
+        action.paused = true;
+        action.play();
+      }
+      gridFinsDeployed.current = false;
+    } else if (!gridFinsDeployed.current &&
+        (missionPhase === "DESCENT" || missionPhase === "LANDING_BURN" || missionPhase === "LANDED")) {
+      for (const action of gridFinActions) {
+        action.reset();
+        action.paused = false;
+        action.play();
+      }
+      if (missionPhase === "LANDED") {
+        mixer.setTime(Math.max(0, ...animations.map((clip) => clip.duration)));
+        for (const action of gridFinActions) action.paused = true;
+      }
+      gridFinsDeployed.current = true;
+    }
     mixer.update(Math.min(delta, 0.1));
+
+    const eastControl = Math.max(-GRID_FIN_STEERING_LIMIT, Math.min(
+      GRID_FIN_STEERING_LIMIT, (1000 - position[0]) * 0.0004 - velocity[0] * 0.02));
+    const northControl = Math.max(-GRID_FIN_STEERING_LIMIT, Math.min(
+      GRID_FIN_STEERING_LIMIT, (200 - position[1]) * 0.0004 - velocity[1] * 0.02));
+    for (const { pivot, axis } of gridFinPivots) {
+      const angle = eastControl * axis.z - northControl * axis.x;
+      pivot.quaternion.setFromAxisAngle(axis, gridFinsDeployed.current ? angle : 0);
+    }
+
+    if (engineGimbal) {
+      const eastGimbal = Math.max(-ENGINE_GIMBAL_LIMIT, Math.min(
+        ENGINE_GIMBAL_LIMIT, (1000 - position[0]) * 0.00012 - velocity[0] * 0.004));
+      const northGimbal = Math.max(-ENGINE_GIMBAL_LIMIT, Math.min(
+        ENGINE_GIMBAL_LIMIT, (200 - position[1]) * 0.00012 - velocity[1] * 0.004));
+      const gimbalActive = thrustPercent > 0.5;
+      engineGimbal.rotation.set(gimbalActive ? northGimbal : 0, 0, gimbalActive ? -eastGimbal : 0);
+    }
 
     const thrust = Math.min(Math.max(thrustPercent, 0), 100) / 100;
     const flicker = 1 + Math.sin(clock.elapsedTime * 31) * 0.055 + Math.sin(clock.elapsedTime * 47) * 0.025;
@@ -169,7 +243,7 @@ function FlightModel({ thrustPercent, altitude, verticalVelocity, missionPhase }
   );
 }
 
-function Rocket({ orientation, position, verticalVelocity, missionPhase, thrustPercent }: { orientation: [number, number, number, number]; position: Position; verticalVelocity: number; missionPhase: MissionPhase; thrustPercent: number }) {
+function Rocket({ orientation, position, velocity, missionPhase, thrustPercent }: { orientation: [number, number, number, number]; position: Position; velocity: Position; missionPhase: MissionPhase; thrustPercent: number }) {
   const group = useRef<Group>(null);
   const targetPosition = useMemo(() => new Vector3(), []);
   const targetOrientation = useMemo(() => new Quaternion(), []);
@@ -195,7 +269,7 @@ function Rocket({ orientation, position, verticalVelocity, missionPhase, thrustP
   return (
     <group ref={group}>
       <Suspense fallback={<FallbackRocket />}>
-        <FlightModel thrustPercent={thrustPercent} altitude={position[2]} verticalVelocity={verticalVelocity} missionPhase={missionPhase} />
+        <FlightModel thrustPercent={thrustPercent} position={position} velocity={velocity} missionPhase={missionPhase} />
       </Suspense>
     </group>
   );
@@ -238,7 +312,7 @@ function FlightCamera({ position }: { position: Position }) {
   return null;
 }
 
-export function RocketView({ orientation, position, verticalVelocity, missionPhase, trail, thrustPercent }: { orientation: [number, number, number, number]; position: Position; verticalVelocity: number; missionPhase: MissionPhase; trail: Position[]; thrustPercent: number }) {
+export function RocketView({ orientation, position, velocity, missionPhase, trail, thrustPercent }: { orientation: [number, number, number, number]; position: Position; velocity: Position; missionPhase: MissionPhase; trail: Position[]; thrustPercent: number }) {
   return (
     <div className="rocket-view" aria-label="Quaternion-driven rocket orientation">
       <Canvas camera={{ position: [90, 45, 130], fov: CAMERA_FOV_DEGREES, near: 0.1, far: 20000 }} dpr={[1, 1.5]}>
@@ -246,7 +320,7 @@ export function RocketView({ orientation, position, verticalVelocity, missionPha
         <ambientLight intensity={1.2} /><directionalLight position={[4, 6, 5]} intensity={3.5} color="#e8f6ff" />
         <pointLight position={[-3, -2, 3]} intensity={thrustPercent > 0 ? 5 : 1.5} color="#e86c3e" />
         <TrajectoryTrail positions={trail} />
-        <Rocket orientation={orientation} position={position} verticalVelocity={verticalVelocity} missionPhase={missionPhase} thrustPercent={thrustPercent} />
+        <Rocket orientation={orientation} position={position} velocity={velocity} missionPhase={missionPhase} thrustPercent={thrustPercent} />
         <FlightCamera position={position} />
         <mesh position={[LANDING_TARGET_EAST_M, 0.6, -LANDING_TARGET_NORTH_M]}>
           <cylinderGeometry args={[24, 24, 1.2, 32]} />
